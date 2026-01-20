@@ -46,16 +46,17 @@ def load_workflows():
 def create_workflow(name, description):
     conn = get_connection()
     cursor = conn.cursor()
+    # Get next sequential ID
+    cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM workflows")
+    next_id = cursor.fetchone()[0]
     cursor.execute("""
-        INSERT INTO workflows (workflow_name, description, created_by)
-        VALUES (%s, %s, %s)
-    """, (name, description, CURRENT_USER))
-    cursor.execute("SELECT MAX(id) FROM workflows")
-    new_id = cursor.fetchone()[0]
+        INSERT INTO workflows (id, workflow_name, description, created_by)
+        VALUES (%s, %s, %s, %s)
+    """, (next_id, name, description, CURRENT_USER))
     conn.commit()
     cursor.close()
     conn.close()
-    return new_id
+    return next_id
 
 # Load t-shirt config from database
 @st.cache_data(ttl=300)
@@ -330,10 +331,12 @@ def save_activity(data, workflow_id, activity_id=None):
         # Log changes to audit
         log_audit(cursor, activity_id, 'UPDATE', old_data, data)
     else:
-        # Insert new
+        # Insert new - get next sequential ID
+        cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM activities")
+        next_id = cursor.fetchone()[0]
         cursor.execute("""
             INSERT INTO activities (
-                workflow_id, activity_name, activity_type, grid_location, connections,
+                id, workflow_id, activity_name, activity_type, grid_location, connections,
                 task_time_size, task_time_midpoint, task_time_custom,
                 labor_rate_size, labor_rate_midpoint, labor_rate_custom,
                 volume_size, volume_midpoint, volume_custom,
@@ -344,10 +347,10 @@ def save_activity(data, workflow_id, activity_id=None):
                 attachments, comments, data_confidence, data_source, created_by
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """, (
-            workflow_id, data['activity_name'], data['activity_type'], data['grid_location'],
+            next_id, workflow_id, data['activity_name'], data['activity_type'], data['grid_location'],
             data['connections'], data['task_time_size'], data['task_time_midpoint'],
             data['task_time_custom'], data['labor_rate_size'], data['labor_rate_midpoint'],
             data['labor_rate_custom'], data['volume_size'], data['volume_midpoint'],
@@ -360,13 +363,11 @@ def save_activity(data, workflow_id, activity_id=None):
             data['comments'], data['data_confidence'], data['data_source'], CURRENT_USER
         ))
 
-        # Get the new ID and log creation
-        cursor.execute("SELECT MAX(id) FROM activities")
-        new_id = cursor.fetchone()[0]
+        # Log creation with the ID we assigned
         cursor.execute("""
             INSERT INTO activity_audit_log (activity_id, action, changed_by)
             VALUES (%s, 'CREATE', %s)
-        """, (new_id, CURRENT_USER))
+        """, (next_id, CURRENT_USER))
 
     conn.commit()
     cursor.close()
@@ -543,7 +544,7 @@ def get_max_col(activities_grid):
     return max_col
 
 max_col = get_max_col(activities_grid)
-cols_to_display = list(range(1, max(max_col + 2, 6)))  # At least 5 columns, plus one extra
+cols_to_display = list(range(1, max_col + 2))  # Show exactly 1 extra unpopulated column
 
 st.markdown("---")
 
@@ -639,7 +640,7 @@ else:
     for i, col_num in enumerate(cols_to_display):
         header_cols[i + 1].markdown(f"**{col_num}**")
 
-    # Determine which rows to show (named ones + any with activities + 2 extra)
+    # Determine which rows to show (named ones + any with activities + exactly 1 unnamed extra)
     rows_with_activities = set()
     for loc in activities_grid.keys():
         letter, _ = parse_grid_location(loc)
@@ -648,13 +649,13 @@ else:
 
     rows_with_names = set(swimlane_names.keys())
 
-    # Show rows up to max used + 2, minimum A-D
+    # Show rows up to max used + exactly 1 extra unnamed row
     all_used_rows = rows_with_activities | rows_with_names
     if all_used_rows:
         max_row_ord = max(ord(r) for r in all_used_rows)
-        last_row_to_show = chr(min(max_row_ord + 2, ord('J')))
+        last_row_to_show = chr(min(max_row_ord + 1, ord('J')))  # +1 for exactly 1 extra row
     else:
-        last_row_to_show = 'D'
+        last_row_to_show = 'A'  # Start with just row A if nothing used
 
     rows_to_display = [chr(ord('A') + i) for i in range(ord(last_row_to_show) - ord('A') + 1)]
 

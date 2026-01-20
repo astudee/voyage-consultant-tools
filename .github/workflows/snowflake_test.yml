@@ -44,9 +44,12 @@ jobs:
           )
 
           cursor = conn.cursor()
+          # Get next sequential ID
+          cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM test_input")
+          next_id = cursor.fetchone()[0]
           cursor.execute(
-              "INSERT INTO test_input (user_text) VALUES (%s)",
-              ("${{ github.event.inputs.message }}",)
+              "INSERT INTO test_input (id, user_text) VALUES (%s, %s)",
+              (next_id, "${{ github.event.inputs.message }}")
           )
           conn.commit()
           cursor.close()

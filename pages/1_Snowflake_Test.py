@@ -26,9 +26,12 @@ if st.button("Submit to Snowflake"):
         try:
             conn = get_connection()
             cursor = conn.cursor()
+            # Get next sequential ID
+            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM test_input")
+            next_id = cursor.fetchone()[0]
             cursor.execute(
-                "INSERT INTO test_input (user_text) VALUES (%s)",
-                (user_text,)
+                "INSERT INTO test_input (id, user_text) VALUES (%s, %s)",
+                (next_id, user_text)
             )
             conn.commit()
             cursor.close()
