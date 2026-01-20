@@ -1,5 +1,7 @@
 # Secrets - NEVER commit this
 .streamlit/secrets.toml
+.snowsql/
+snowsql_config
 
 # Python
 __pycache__/
