@@ -535,6 +535,8 @@ if 'delete_confirm' not in st.session_state:
     st.session_state.delete_confirm = None
 if 'decision_branches' not in st.session_state:
     st.session_state.decision_branches = 2
+if 'activity_type' not in st.session_state:
+    st.session_state.activity_type = 'task'
 if 'current_attachments' not in st.session_state:
     st.session_state.current_attachments = []
 if 'selected_grid' not in st.session_state:
@@ -613,6 +615,8 @@ else:
                             st.session_state.show_form = False
                             st.session_state.editing_id = None
                             st.session_state.selected_grid = None
+                            st.session_state.activity_type = 'task'
+                            st.session_state.activity_type_initialized = False
                             st.rerun()
                         break
             else:
@@ -830,6 +834,8 @@ else:
                             st.session_state.editing_id = None
                             st.session_state.decision_branches = 2
                             st.session_state.current_attachments = []
+                            st.session_state.activity_type = 'task'
+                            st.session_state.activity_type_initialized = False
                             st.rerun()
 
 # Show selected location
@@ -845,6 +851,8 @@ if not st.session_state.show_form:
         st.session_state.editing_id = None
         st.session_state.decision_branches = 2
         st.session_state.current_attachments = []
+        st.session_state.activity_type = 'task'
+        st.session_state.activity_type_initialized = False
         st.session_state.selected_grid = None
         st.info("Click a cell on the grid above to select where to place the activity.")
 
@@ -935,62 +943,95 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
     if st.session_state.editing_id:
         existing = load_activity(st.session_state.editing_id)
         st.markdown(f"### Edit Activity #{st.session_state.editing_id}")
+        # Initialize type from existing when editing
+        if 'activity_type_initialized' not in st.session_state:
+            st.session_state.activity_type = existing.get('ACTIVITY_TYPE', 'task') if existing else 'task'
+            st.session_state.activity_type_initialized = True
     else:
         st.markdown("### New Activity")
         if not st.session_state.selected_grid:
             st.warning("Please select a grid location above before filling out the form.")
 
+    # Type selector OUTSIDE the form so it updates dynamically
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        pass  # Name goes in form
+    with col2:
+        activity_type = st.selectbox("Type*", ['task', 'decision'],
+            index=['task', 'decision'].index(st.session_state.activity_type),
+            key="activity_type_selector")
+        if activity_type != st.session_state.activity_type:
+            st.session_state.activity_type = activity_type
+            st.rerun()
+    with col3:
+        grid_loc = st.session_state.selected_grid or (existing.get('GRID_LOCATION', '') if existing else '')
+        st.text_input("Grid Location", value=grid_loc, disabled=True, key="grid_loc_display")
+
+    # Parse existing connections
+    existing_connections = []
+    if existing and existing.get('CONNECTIONS'):
+        try:
+            existing_connections = json.loads(existing.get('CONNECTIONS', '[]'))
+        except:
+            existing_connections = []
+
+    # Connections Section OUTSIDE the form for dynamic updates
+    st.markdown("#### Connections")
+
+    if st.session_state.activity_type == 'task':
+        next_step = st.text_input("Next Activity (grid location)",
+            value=existing_connections[0].get('next', '') if existing_connections else '',
+            help="Enter the grid location of the next activity (e.g., A2)",
+            key="task_next_step")
+    else:
+        st.markdown("**Decision Branches**")
+        st.caption("Define each branch with a label (e.g., 'Auto', 'Home') and destination grid location")
+
+        # Add Branch button
+        if st.button("+ Add Branch"):
+            st.session_state.decision_branches += 1
+            st.rerun()
+
+        for i in range(st.session_state.decision_branches):
+            col1, col2, col3 = st.columns([2, 2, 0.5])
+            default_conditions = ['Yes', 'No', 'Maybe', 'Escalate', 'Approve', 'Deny']
+            with col1:
+                default_cond = default_conditions[i] if i < len(default_conditions) else ''
+                st.text_input(
+                    f"Branch {i+1} Label",
+                    value=existing_connections[i].get('condition', default_cond) if i < len(existing_connections) else default_cond,
+                    key=f"cond_{i}",
+                    placeholder="e.g., Auto, Home, Escalate"
+                )
+            with col2:
+                st.text_input(
+                    f"Destination {i+1}",
+                    value=existing_connections[i].get('next', '') if i < len(existing_connections) else '',
+                    key=f"next_{i}",
+                    placeholder="e.g., C3, D3"
+                )
+            with col3:
+                if st.session_state.decision_branches > 2 and i >= 2:
+                    if st.button("✕", key=f"remove_branch_{i}", help="Remove this branch"):
+                        st.session_state.decision_branches -= 1
+                        st.rerun()
+
     with st.form("activity_form"):
         # Basic Info Section
         st.markdown("#### Basic Info")
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            activity_name = st.text_input("Activity Name*", value=existing.get('ACTIVITY_NAME', '') if existing else '', max_chars=100)
-        with col2:
-            activity_type = st.selectbox("Type*", ['task', 'decision'],
-                index=['task', 'decision'].index(existing.get('ACTIVITY_TYPE', 'task')) if existing and existing.get('ACTIVITY_TYPE') else 0)
-        with col3:
-            grid_loc = st.session_state.selected_grid or (existing.get('GRID_LOCATION', '') if existing else '')
-            st.text_input("Grid Location", value=grid_loc, disabled=True)
+        activity_name = st.text_input("Activity Name*", value=existing.get('ACTIVITY_NAME', '') if existing else '', max_chars=100)
 
-        # Connections Section
-        st.markdown("#### Connections")
+        # Hidden field to capture activity type in form submission
+        activity_type = st.session_state.activity_type
 
-        existing_connections = []
-        if existing and existing.get('CONNECTIONS'):
-            try:
-                existing_connections = json.loads(existing.get('CONNECTIONS', '[]'))
-            except:
-                existing_connections = []
-
-        if activity_type == 'task':
-            next_step = st.text_input("Next Activity (grid location)",
-                value=existing_connections[0].get('next', '') if existing_connections else '',
-                help="Enter the grid location of the next activity (e.g., A2)")
-            connections_data = [{"next": next_step}] if next_step else []
+        # Build connections data from session state keys
+        if st.session_state.activity_type == 'task':
+            connections_data = [{"next": st.session_state.get('task_next_step', '')}] if st.session_state.get('task_next_step') else []
         else:
-            st.markdown("**Decision Branches**")
-            st.caption("Define the conditions and their corresponding next steps")
-
             connections_data = []
             for i in range(st.session_state.decision_branches):
-                col1, col2 = st.columns(2)
-                default_conditions = ['Yes', 'No', 'Maybe', 'Escalate', 'Approve', 'Deny']
-                with col1:
-                    default_cond = default_conditions[i] if i < len(default_conditions) else ''
-                    condition = st.text_input(
-                        f"Condition {i+1}",
-                        value=existing_connections[i].get('condition', default_cond) if i < len(existing_connections) else default_cond,
-                        key=f"cond_{i}",
-                        placeholder="e.g., Approved, Denied"
-                    )
-                with col2:
-                    next_loc = st.text_input(
-                        f"Next Activity {i+1}",
-                        value=existing_connections[i].get('next', '') if i < len(existing_connections) else '',
-                        key=f"next_{i}",
-                        placeholder="e.g., B1"
-                    )
+                condition = st.session_state.get(f'cond_{i}', '')
+                next_loc = st.session_state.get(f'next_{i}', '')
                 if condition or next_loc:
                     connections_data.append({"condition": condition, "next": next_loc})
 
@@ -1248,6 +1289,8 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
                     st.session_state.editing_id = None
                     st.session_state.current_attachments = []
                     st.session_state.selected_grid = None
+                    st.session_state.activity_type = 'task'
+                    st.session_state.activity_type_initialized = False
                     st.rerun()
                 except Exception as e:
                     st.error(f"Failed to save: {e}")
@@ -1257,15 +1300,9 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
             st.session_state.editing_id = None
             st.session_state.current_attachments = []
             st.session_state.selected_grid = None
+            st.session_state.activity_type = 'task'
+            st.session_state.activity_type_initialized = False
             st.rerun()
-
-    # Add Branch button (outside form for decisions)
-    if activity_type == 'decision':
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            if st.button("+ Add Branch"):
-                st.session_state.decision_branches += 1
-                st.rerun()
 
     # Delete button (outside form)
     if st.session_state.editing_id:
@@ -1284,6 +1321,8 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
                         st.session_state.editing_id = None
                         st.session_state.delete_confirm = None
                         st.session_state.current_attachments = []
+                        st.session_state.activity_type = 'task'
+                        st.session_state.activity_type_initialized = False
                         st.session_state.selected_grid = None
                         st.rerun()
                     except Exception as e:
