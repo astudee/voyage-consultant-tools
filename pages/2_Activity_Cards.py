@@ -24,9 +24,12 @@ SWIMLANE_LETTERS = [chr(ord('A') + i) for i in range(10)]  # A through J
 # Config - eventually move to a settings page or database
 CONFIG = {
     "productivity_factor": 0.85,  # Assumes 85% productive time
-    "work_hours_per_month": 173,  # ~40 hrs/week × 4.33 weeks
+    "hours_per_year": 1840,       # Total work hours per year
+    "training_hours_per_year": 40, # Hours spent on training per year
     "work_months_per_year": 12,
 }
+# Derived: adjusted work hours per month
+CONFIG["work_hours_per_month"] = (CONFIG["hours_per_year"] - CONFIG["training_hours_per_year"]) / CONFIG["work_months_per_year"]
 
 # Cached Snowflake connection for reads
 @st.cache_resource
@@ -918,7 +921,7 @@ try:
         cols[6].write("")
 
         # Productivity assumption note
-        st.caption(f"*Assumes {CONFIG['productivity_factor']*100:.0f}% productivity factor*")
+        st.caption(f"*Assumes {CONFIG['productivity_factor']*100:.0f}% productivity factor, {CONFIG['hours_per_year']:,} hrs/year - {CONFIG['training_hours_per_year']} training = {CONFIG['work_hours_per_month']:.0f} hrs/month capacity*")
     else:
         st.info("No activities in this workflow yet. Click a cell on the grid to create one.")
 except Exception as e:
