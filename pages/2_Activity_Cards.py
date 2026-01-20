@@ -21,8 +21,9 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 # Swimlane letters to always show
 SWIMLANE_LETTERS = [chr(ord('A') + i) for i in range(10)]  # A through J
 
-# Connect to Snowflake
-def get_connection():
+# Cached Snowflake connection for reads
+@st.cache_resource
+def _get_cached_connection():
     return snowflake.connector.connect(
         account=st.secrets["snowflake"]["account"],
         user=st.secrets["snowflake"]["user"],
@@ -32,19 +33,44 @@ def get_connection():
         schema=st.secrets["snowflake"]["schema"]
     )
 
-# Load workflows
+def get_read_cursor():
+    """Get a cursor from the cached connection for read operations, reconnecting if needed."""
+    try:
+        conn = _get_cached_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        cursor.close()
+        return conn.cursor()
+    except Exception:
+        # Connection died, clear cache and reconnect
+        _get_cached_connection.clear()
+        conn = _get_cached_connection()
+        return conn.cursor()
+
+def get_write_connection():
+    """Get a fresh connection for write operations that need commit/rollback."""
+    return snowflake.connector.connect(
+        account=st.secrets["snowflake"]["account"],
+        user=st.secrets["snowflake"]["user"],
+        password=st.secrets["snowflake"]["password"],
+        warehouse=st.secrets["snowflake"]["warehouse"],
+        database=st.secrets["snowflake"]["database"],
+        schema=st.secrets["snowflake"]["schema"]
+    )
+
+# Load workflows - cached for 5 minutes
+@st.cache_data(ttl=300)
 def load_workflows():
-    conn = get_connection()
-    cursor = conn.cursor()
+    cursor = get_read_cursor()
     cursor.execute("SELECT id, workflow_name, description FROM workflows ORDER BY workflow_name")
     rows = cursor.fetchall()
     cursor.close()
-    conn.close()
     return rows
 
 # Create workflow
 def create_workflow(name, description):
-    conn = get_connection()
+    conn = get_write_connection()
     cursor = conn.cursor()
     # Get next sequential ID
     cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM workflows")
@@ -56,13 +82,14 @@ def create_workflow(name, description):
     conn.commit()
     cursor.close()
     conn.close()
+    # Clear workflows cache so new workflow appears
+    load_workflows.clear()
     return next_id
 
-# Load t-shirt config from database
+# Load t-shirt config from database - cached for 5 minutes
 @st.cache_data(ttl=300)
 def load_tshirt_config():
-    conn = get_connection()
-    cursor = conn.cursor()
+    cursor = get_read_cursor()
     cursor.execute("""
         SELECT category, size, label, min_value, max_value, midpoint, unit
         FROM tshirt_config
@@ -71,7 +98,6 @@ def load_tshirt_config():
     """)
     rows = cursor.fetchall()
     cursor.close()
-    conn.close()
 
     config = {}
     for row in rows:
@@ -88,10 +114,10 @@ def load_tshirt_config():
         })
     return config
 
-# Load swimlane config for a workflow
+# Load swimlane config for a workflow - cached for 5 minutes
+@st.cache_data(ttl=300)
 def load_swimlane_config(workflow_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+    cursor = get_read_cursor()
     cursor.execute("""
         SELECT swimlane_letter, swimlane_name
         FROM swimlane_config
@@ -100,12 +126,11 @@ def load_swimlane_config(workflow_id):
     """, (workflow_id,))
     rows = cursor.fetchall()
     cursor.close()
-    conn.close()
     return {row[0]: row[1] for row in rows}
 
 # Save swimlane name
 def save_swimlane_name(workflow_id, letter, name):
-    conn = get_connection()
+    conn = get_write_connection()
     cursor = conn.cursor()
     # Check if exists
     cursor.execute("""
@@ -127,35 +152,27 @@ def save_swimlane_name(workflow_id, letter, name):
     conn.commit()
     cursor.close()
     conn.close()
+    # Clear swimlane cache so changes appear
+    load_swimlane_config.clear()
 
-# Load all activities for a workflow
-def load_activities(workflow_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+# Load all activities for a workflow - single query returns both list and grid formats
+@st.cache_data(ttl=60)
+def _load_activities_data(workflow_id):
+    """Internal cached function that loads activities once and returns both formats."""
+    cursor = get_read_cursor()
     cursor.execute("""
-        SELECT id, activity_name, activity_type, grid_location, status, created_at
+        SELECT id, activity_name, activity_type, grid_location, status, created_at, connections
         FROM activities
         WHERE workflow_id = %s
         ORDER BY grid_location, activity_name
     """, (workflow_id,))
     rows = cursor.fetchall()
     cursor.close()
-    conn.close()
-    return rows
 
-# Load activities as grid map for a workflow
-def load_activities_grid(workflow_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, activity_name, activity_type, grid_location, connections
-        FROM activities
-        WHERE workflow_id = %s
-    """, (workflow_id,))
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    # Build list format (id, name, type, grid_location, status, created_at)
+    activities_list = [(r[0], r[1], r[2], r[3], r[4], r[5]) for r in rows]
 
+    # Build grid format
     grid = {}
     for row in rows:
         if row[3]:  # grid_location
@@ -163,9 +180,24 @@ def load_activities_grid(workflow_id):
                 'id': row[0],
                 'name': row[1],
                 'type': row[2],
-                'connections': row[4]
+                'connections': row[6]
             }
+
+    return activities_list, grid
+
+def load_activities(workflow_id):
+    """Get activities as a list for the Activity List view."""
+    activities_list, _ = _load_activities_data(workflow_id)
+    return activities_list
+
+def load_activities_grid(workflow_id):
+    """Get activities as a grid map for the visual grid picker."""
+    _, grid = _load_activities_data(workflow_id)
     return grid
+
+def clear_activities_cache():
+    """Clear the activities cache after modifications."""
+    _load_activities_data.clear()
 
 # Parse grid location into letter and number
 def parse_grid_location(loc):
@@ -180,15 +212,13 @@ def parse_grid_location(loc):
 def build_grid_location(letter, number):
     return f"{letter}{number}"
 
-# Load single activity
+# Load single activity (not cached - needs fresh data for editing)
 def load_activity(activity_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+    cursor = get_read_cursor()
     cursor.execute("SELECT * FROM activities WHERE id = %s", (activity_id,))
     columns = [desc[0] for desc in cursor.description]
     row = cursor.fetchone()
     cursor.close()
-    conn.close()
     if row:
         return dict(zip(columns, row))
     return None
@@ -196,7 +226,7 @@ def load_activity(activity_id):
 # Shift activities in a swimlane
 def shift_activities(workflow_id, swimlane_letter, from_position):
     """Shift all activities in a swimlane from position onwards by +1"""
-    conn = get_connection()
+    conn = get_write_connection()
     cursor = conn.cursor()
 
     # Get all activities in this swimlane at or after the position
@@ -265,11 +295,12 @@ def shift_activities(workflow_id, swimlane_letter, from_position):
     conn.commit()
     cursor.close()
     conn.close()
+    clear_activities_cache()
     return len(activities_to_shift)
 
 # Save activity
 def save_activity(data, workflow_id, activity_id=None):
-    conn = get_connection()
+    conn = get_write_connection()
     cursor = conn.cursor()
 
     if activity_id:
@@ -372,6 +403,7 @@ def save_activity(data, workflow_id, activity_id=None):
     conn.commit()
     cursor.close()
     conn.close()
+    clear_activities_cache()
     return True
 
 # Log audit changes
@@ -393,7 +425,7 @@ def log_audit(cursor, activity_id, action, old_data, new_data):
 
 # Delete activity
 def delete_activity(activity_id):
-    conn = get_connection()
+    conn = get_write_connection()
     cursor = conn.cursor()
 
     # Log deletion
@@ -407,6 +439,7 @@ def delete_activity(activity_id):
     conn.commit()
     cursor.close()
     conn.close()
+    clear_activities_cache()
 
 # Get midpoint for t-shirt size
 def get_midpoint(config, category, size):
@@ -544,7 +577,8 @@ def get_max_col(activities_grid):
     return max_col
 
 max_col = get_max_col(activities_grid)
-cols_to_display = list(range(1, max_col + 2))  # Show exactly 1 extra unpopulated column
+# Show exactly 1 extra unpopulated column, but minimum 4 columns for usability
+cols_to_display = list(range(1, max(max_col + 2, 5)))
 
 st.markdown("---")
 
@@ -649,13 +683,13 @@ else:
 
     rows_with_names = set(swimlane_names.keys())
 
-    # Show rows up to max used + exactly 1 extra unnamed row
+    # Show rows up to max used + exactly 1 extra unnamed row, minimum 3 rows for usability
     all_used_rows = rows_with_activities | rows_with_names
     if all_used_rows:
         max_row_ord = max(ord(r) for r in all_used_rows)
-        last_row_to_show = chr(min(max_row_ord + 1, ord('J')))  # +1 for exactly 1 extra row
+        last_row_to_show = chr(min(max(max_row_ord + 1, ord('C')), ord('J')))  # +1 extra, min C
     else:
-        last_row_to_show = 'A'  # Start with just row A if nothing used
+        last_row_to_show = 'C'  # Start with rows A-C if nothing used
 
     rows_to_display = [chr(ord('A') + i) for i in range(ord(last_row_to_show) - ord('A') + 1)]
 
