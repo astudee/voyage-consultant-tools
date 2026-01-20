@@ -21,6 +21,13 @@ os.makedirs(UPLOADS_DIR, exist_ok=True)
 # Swimlane letters to always show
 SWIMLANE_LETTERS = [chr(ord('A') + i) for i in range(10)]  # A through J
 
+# Config - eventually move to a settings page or database
+CONFIG = {
+    "productivity_factor": 0.85,  # Assumes 85% productive time
+    "work_hours_per_month": 173,  # ~40 hrs/week × 4.33 weeks
+    "work_months_per_year": 12,
+}
+
 # Cached Snowflake connection for reads
 @st.cache_resource
 def _get_cached_connection():
@@ -161,7 +168,10 @@ def _load_activities_data(workflow_id):
     """Internal cached function that loads activities once and returns both formats."""
     cursor = get_read_cursor()
     cursor.execute("""
-        SELECT id, activity_name, activity_type, grid_location, status, created_at, connections
+        SELECT id, activity_name, activity_type, grid_location, status, created_at, connections,
+               task_time_size, task_time_midpoint, task_time_custom,
+               labor_rate_size, labor_rate_midpoint, labor_rate_custom,
+               volume_size, volume_midpoint, volume_custom
         FROM activities
         WHERE workflow_id = %s
         ORDER BY grid_location, activity_name
@@ -169,8 +179,26 @@ def _load_activities_data(workflow_id):
     rows = cursor.fetchall()
     cursor.close()
 
-    # Build list format (id, name, type, grid_location, status, created_at)
-    activities_list = [(r[0], r[1], r[2], r[3], r[4], r[5]) for r in rows]
+    # Build list format with cost-related fields
+    activities_list = []
+    for r in rows:
+        activities_list.append({
+            'id': r[0],
+            'name': r[1],
+            'type': r[2],
+            'grid_location': r[3],
+            'status': r[4],
+            'created_at': r[5],
+            'task_time_size': r[7],
+            'task_time_midpoint': r[8],
+            'task_time_custom': r[9],
+            'labor_rate_size': r[10],
+            'labor_rate_midpoint': r[11],
+            'labor_rate_custom': r[12],
+            'volume_size': r[13],
+            'volume_midpoint': r[14],
+            'volume_custom': r[15],
+        })
 
     # Build grid format
     grid = {}
@@ -198,6 +226,43 @@ def load_activities_grid(workflow_id):
 def clear_activities_cache():
     """Clear the activities cache after modifications."""
     _load_activities_data.clear()
+
+def calculate_activity_costs(activity):
+    """Calculate monthly and annual costs for an activity."""
+    # Get effective values (use custom if "Other" was selected, otherwise midpoint)
+    task_time = None
+    if activity.get('task_time_size') == 'Other' and activity.get('task_time_custom'):
+        task_time = float(activity['task_time_custom'])
+    elif activity.get('task_time_midpoint'):
+        task_time = float(activity['task_time_midpoint'])
+
+    labor_rate = None
+    if activity.get('labor_rate_size') == 'Other' and activity.get('labor_rate_custom'):
+        labor_rate = float(activity['labor_rate_custom'])
+    elif activity.get('labor_rate_midpoint'):
+        labor_rate = float(activity['labor_rate_midpoint'])
+
+    volume = None
+    if activity.get('volume_size') == 'Other' and activity.get('volume_custom'):
+        volume = float(activity['volume_custom'])
+    elif activity.get('volume_midpoint'):
+        volume = float(activity['volume_midpoint'])
+
+    # Calculate costs if we have all required values
+    if task_time and labor_rate and volume and task_time > 0:
+        productivity = CONFIG["productivity_factor"]
+        effective_task_time = task_time / productivity  # minutes per task adjusted
+        tasks_per_hour = 60 / effective_task_time
+        cost_per_task = labor_rate / tasks_per_hour
+        monthly_cost = cost_per_task * volume
+        annual_cost = monthly_cost * CONFIG["work_months_per_year"]
+        return {
+            'monthly_cost': monthly_cost,
+            'annual_cost': annual_cost,
+            'cost_per_task': cost_per_task,
+            'tasks_per_hour': tasks_per_hour,
+        }
+    return None
 
 # Parse grid location into letter and number
 def parse_grid_location(loc):
@@ -787,28 +852,45 @@ try:
     activities = load_activities(workflow_id)
 
     if activities:
-        cols = st.columns([1, 3, 2, 2, 2, 1])
+        # Header row
+        cols = st.columns([0.5, 2.5, 1.5, 1, 1.5, 1.5, 0.8])
         cols[0].markdown("**ID**")
         cols[1].markdown("**Name**")
         cols[2].markdown("**Type**")
         cols[3].markdown("**Grid**")
-        cols[4].markdown("**Status**")
-        cols[5].markdown("**Actions**")
+        cols[4].markdown("**Monthly Cost**")
+        cols[5].markdown("**Annual Cost**")
+        cols[6].markdown("**Actions**")
 
         st.divider()
 
+        # Track totals
+        total_monthly = 0
+        total_annual = 0
+
         for activity in activities:
-            cols = st.columns([1, 3, 2, 2, 2, 1])
-            cols[0].write(activity[0])
-            cols[1].write(activity[1] or "-")
-            cols[2].write(activity[2] or "-")
-            cols[3].write(activity[3] or "-")
-            cols[4].write(activity[4] or "-")
-            if cols[5].button("Edit", key=f"edit_{activity[0]}"):
-                st.session_state.editing_id = activity[0]
+            # Calculate costs for this activity
+            costs = calculate_activity_costs(activity)
+            monthly_cost = costs['monthly_cost'] if costs else None
+            annual_cost = costs['annual_cost'] if costs else None
+
+            if monthly_cost:
+                total_monthly += monthly_cost
+            if annual_cost:
+                total_annual += annual_cost
+
+            cols = st.columns([0.5, 2.5, 1.5, 1, 1.5, 1.5, 0.8])
+            cols[0].write(activity['id'])
+            cols[1].write(activity['name'] or "-")
+            cols[2].write(activity['type'] or "-")
+            cols[3].write(activity['grid_location'] or "-")
+            cols[4].write(f"${monthly_cost:,.2f}" if monthly_cost else "-")
+            cols[5].write(f"${annual_cost:,.2f}" if annual_cost else "-")
+            if cols[6].button("Edit", key=f"edit_{activity['id']}"):
+                st.session_state.editing_id = activity['id']
                 st.session_state.show_form = True
-                st.session_state.selected_grid = activity[3]
-                existing = load_activity(activity[0])
+                st.session_state.selected_grid = activity['grid_location']
+                existing = load_activity(activity['id'])
                 if existing and existing.get('ATTACHMENTS'):
                     try:
                         st.session_state.current_attachments = json.loads(existing.get('ATTACHMENTS', '[]'))
@@ -823,6 +905,20 @@ try:
                     except:
                         st.session_state.decision_branches = 2
                 st.rerun()
+
+        # Total row
+        st.divider()
+        cols = st.columns([0.5, 2.5, 1.5, 1, 1.5, 1.5, 0.8])
+        cols[0].write("")
+        cols[1].markdown("**TOTAL**")
+        cols[2].write("")
+        cols[3].write("")
+        cols[4].markdown(f"**${total_monthly:,.2f}**")
+        cols[5].markdown(f"**${total_annual:,.2f}**")
+        cols[6].write("")
+
+        # Productivity assumption note
+        st.caption(f"*Assumes {CONFIG['productivity_factor']*100:.0f}% productivity factor*")
     else:
         st.info("No activities in this workflow yet. Click a cell on the grid to create one.")
 except Exception as e:
