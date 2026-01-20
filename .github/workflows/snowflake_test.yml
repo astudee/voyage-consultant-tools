@@ -1,0 +1,56 @@
+name: Snowflake Test
+
+on:
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+    inputs:
+      message:
+        description: 'Message to write to Snowflake'
+        required: true
+        default: 'Hello from GitHub Actions!'
+
+jobs:
+  write-to-snowflake:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Snowflake connector
+        run: pip install snowflake-connector-python
+      
+      - name: Write to Snowflake
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+        run: |
+          python << 'EOF'
+          import os
+          import snowflake.connector
+
+          conn = snowflake.connector.connect(
+              account=os.environ['SNOWFLAKE_ACCOUNT'],
+              user=os.environ['SNOWFLAKE_USER'],
+              password=os.environ['SNOWFLAKE_PASSWORD'],
+              warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
+              database=os.environ['SNOWFLAKE_DATABASE'],
+              schema=os.environ['SNOWFLAKE_SCHEMA']
+          )
+
+          cursor = conn.cursor()
+          cursor.execute(
+              "INSERT INTO test_input (user_text) VALUES (%s)",
+              ("${{ github.event.inputs.message }}",)
+          )
+          conn.commit()
+          cursor.close()
+          conn.close()
+
+          print("✅ Successfully wrote to Snowflake!")
+          EOF
