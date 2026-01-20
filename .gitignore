@@ -3,6 +3,9 @@
 .snowsql/
 snowsql_config
 
+# Uploaded files
+uploads/
+
 # Python
 __pycache__/
 *.py[cod]

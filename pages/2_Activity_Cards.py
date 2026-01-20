@@ -1,6 +1,8 @@
 import streamlit as st
 import snowflake.connector
 import json
+import os
+import uuid
 from datetime import datetime
 
 st.set_page_config(page_title="Activity Cards", page_icon="📋", layout="wide")
@@ -10,6 +12,10 @@ st.markdown("Create and manage activity cards for process mapping.")
 
 # Current user (hardcoded for now)
 CURRENT_USER = "app_user"
+
+# Uploads directory
+UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 # Connect to Snowflake
 def get_connection():
@@ -53,22 +59,14 @@ def load_tshirt_config():
     return config
 
 # Load all activities
-def load_activities(engagement_id=None):
+def load_activities():
     conn = get_connection()
     cursor = conn.cursor()
-    if engagement_id:
-        cursor.execute("""
-            SELECT id, activity_name, activity_type, swimlane, grid_location, status, created_at
-            FROM activities
-            WHERE engagement_id = %s
-            ORDER BY grid_location, activity_name
-        """, (engagement_id,))
-    else:
-        cursor.execute("""
-            SELECT id, activity_name, activity_type, swimlane, grid_location, status, created_at
-            FROM activities
-            ORDER BY grid_location, activity_name
-        """)
+    cursor.execute("""
+        SELECT id, activity_name, activity_type, grid_location, status, created_at
+        FROM activities
+        ORDER BY grid_location, activity_name
+    """)
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -98,11 +96,8 @@ def save_activity(data, activity_id=None):
 
         cursor.execute("""
             UPDATE activities SET
-                engagement_id = %s,
                 activity_name = %s,
-                description = %s,
                 activity_type = %s,
-                swimlane = %s,
                 grid_location = %s,
                 connections = %s,
                 task_time_size = %s,
@@ -137,8 +132,7 @@ def save_activity(data, activity_id=None):
                 modified_by = %s
             WHERE id = %s
         """, (
-            data['engagement_id'], data['activity_name'], data['description'],
-            data['activity_type'], data['swimlane'], data['grid_location'],
+            data['activity_name'], data['activity_type'], data['grid_location'],
             data['connections'], data['task_time_size'], data['task_time_midpoint'],
             data['task_time_custom'], data['labor_rate_size'], data['labor_rate_midpoint'],
             data['labor_rate_custom'], data['volume_size'], data['volume_midpoint'],
@@ -158,22 +152,21 @@ def save_activity(data, activity_id=None):
         # Insert new
         cursor.execute("""
             INSERT INTO activities (
-                engagement_id, activity_name, description, activity_type, swimlane,
-                grid_location, connections, task_time_size, task_time_midpoint,
-                task_time_custom, labor_rate_size, labor_rate_midpoint, labor_rate_custom,
-                volume_size, volume_midpoint, volume_custom, target_cycle_time_hours,
-                actual_cycle_time_hours, disposition_complete_pct, disposition_forwarded_pct,
-                disposition_pended_pct, transformation_plan, phase, status, cost_to_change,
-                projected_annual_savings, process_steps, systems_touched, constraints_rules,
-                opportunities, next_steps, attachments, comments, data_confidence,
-                data_source, created_by
+                activity_name, activity_type, grid_location, connections,
+                task_time_size, task_time_midpoint, task_time_custom,
+                labor_rate_size, labor_rate_midpoint, labor_rate_custom,
+                volume_size, volume_midpoint, volume_custom,
+                target_cycle_time_hours, actual_cycle_time_hours,
+                disposition_complete_pct, disposition_forwarded_pct, disposition_pended_pct,
+                transformation_plan, phase, status, cost_to_change, projected_annual_savings,
+                process_steps, systems_touched, constraints_rules, opportunities, next_steps,
+                attachments, comments, data_confidence, data_source, created_by
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """, (
-            data['engagement_id'], data['activity_name'], data['description'],
-            data['activity_type'], data['swimlane'], data['grid_location'],
+            data['activity_name'], data['activity_type'], data['grid_location'],
             data['connections'], data['task_time_size'], data['task_time_midpoint'],
             data['task_time_custom'], data['labor_rate_size'], data['labor_rate_midpoint'],
             data['labor_rate_custom'], data['volume_size'], data['volume_midpoint'],
@@ -202,7 +195,7 @@ def save_activity(data, activity_id=None):
 # Log audit changes
 def log_audit(cursor, activity_id, action, old_data, new_data):
     fields_to_track = [
-        'activity_name', 'description', 'activity_type', 'swimlane', 'grid_location',
+        'activity_name', 'activity_type', 'grid_location',
         'connections', 'task_time_size', 'labor_rate_size', 'volume_size',
         'transformation_plan', 'status', 'data_confidence'
     ]
@@ -241,6 +234,15 @@ def get_midpoint(config, category, size):
                 return item['midpoint']
     return None
 
+# Save uploaded file
+def save_uploaded_file(uploaded_file):
+    file_id = str(uuid.uuid4())[:8]
+    filename = f"{file_id}_{uploaded_file.name}"
+    filepath = os.path.join(UPLOADS_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    return {"name": uploaded_file.name, "filename": filename}
+
 # Initialize session state
 if 'editing_id' not in st.session_state:
     st.session_state.editing_id = None
@@ -248,6 +250,10 @@ if 'show_form' not in st.session_state:
     st.session_state.show_form = False
 if 'delete_confirm' not in st.session_state:
     st.session_state.delete_confirm = None
+if 'decision_branches' not in st.session_state:
+    st.session_state.decision_branches = 2
+if 'current_attachments' not in st.session_state:
+    st.session_state.current_attachments = []
 
 # Load t-shirt config
 try:
@@ -256,47 +262,59 @@ except Exception as e:
     st.error(f"Failed to load t-shirt config: {e}")
     tshirt_config = {}
 
-# Sidebar for engagement filter
-st.sidebar.markdown("### Filters")
-engagement_filter = st.sidebar.text_input("Engagement ID", "")
-
 # Main content
 col1, col2 = st.columns([3, 1])
 with col1:
     st.markdown("### Activities")
 with col2:
-    if st.button("➕ New Activity", type="primary"):
+    if st.button("+ New Activity", type="primary"):
         st.session_state.show_form = True
         st.session_state.editing_id = None
+        st.session_state.decision_branches = 2
+        st.session_state.current_attachments = []
 
 # List view
 try:
-    activities = load_activities(engagement_filter if engagement_filter else None)
+    activities = load_activities()
 
     if activities:
         # Table header
-        cols = st.columns([1, 3, 2, 2, 1, 2, 1])
+        cols = st.columns([1, 3, 2, 2, 2, 1])
         cols[0].markdown("**ID**")
         cols[1].markdown("**Name**")
         cols[2].markdown("**Type**")
-        cols[3].markdown("**Swimlane**")
-        cols[4].markdown("**Grid**")
-        cols[5].markdown("**Status**")
-        cols[6].markdown("**Actions**")
+        cols[3].markdown("**Grid**")
+        cols[4].markdown("**Status**")
+        cols[5].markdown("**Actions**")
 
         st.divider()
 
         for activity in activities:
-            cols = st.columns([1, 3, 2, 2, 1, 2, 1])
+            cols = st.columns([1, 3, 2, 2, 2, 1])
             cols[0].write(activity[0])
             cols[1].write(activity[1] or "-")
             cols[2].write(activity[2] or "-")
             cols[3].write(activity[3] or "-")
             cols[4].write(activity[4] or "-")
-            cols[5].write(activity[5] or "-")
-            if cols[6].button("Edit", key=f"edit_{activity[0]}"):
+            if cols[5].button("Edit", key=f"edit_{activity[0]}"):
                 st.session_state.editing_id = activity[0]
                 st.session_state.show_form = True
+                # Load existing attachments
+                existing = load_activity(activity[0])
+                if existing and existing.get('ATTACHMENTS'):
+                    try:
+                        st.session_state.current_attachments = json.loads(existing.get('ATTACHMENTS', '[]'))
+                    except:
+                        st.session_state.current_attachments = []
+                else:
+                    st.session_state.current_attachments = []
+                # Load existing branches count
+                if existing and existing.get('CONNECTIONS'):
+                    try:
+                        conns = json.loads(existing.get('CONNECTIONS', '[]'))
+                        st.session_state.decision_branches = max(2, len(conns))
+                    except:
+                        st.session_state.decision_branches = 2
                 st.rerun()
     else:
         st.info("No activities found. Click 'New Activity' to create one.")
@@ -320,19 +338,20 @@ if st.session_state.show_form:
         st.markdown("#### Basic Info")
         col1, col2 = st.columns(2)
         with col1:
-            engagement_id = st.text_input("Engagement ID", value=existing.get('ENGAGEMENT_ID', '') if existing else engagement_filter)
             activity_name = st.text_input("Activity Name*", value=existing.get('ACTIVITY_NAME', '') if existing else '', max_chars=100)
+        with col2:
             activity_type = st.selectbox("Type*", ['task', 'decision'],
                 index=['task', 'decision'].index(existing.get('ACTIVITY_TYPE', 'task')) if existing and existing.get('ACTIVITY_TYPE') else 0)
-        with col2:
-            swimlane = st.text_input("Swimlane", value=existing.get('SWIMLANE', '') if existing else '', max_chars=100)
-            grid_location = st.text_input("Grid Location (e.g., A1, B2)", value=existing.get('GRID_LOCATION', '') if existing else '', max_chars=10)
 
-        description = st.text_area("Description", value=existing.get('DESCRIPTION', '') if existing else '', max_chars=300, height=100)
+        grid_location = st.text_input(
+            "Grid Location*",
+            value=existing.get('GRID_LOCATION', '') if existing else '',
+            max_chars=10,
+            help="Letter = swimlane row, Number = sequence (e.g., A1 = Swimlane A, Step 1)"
+        )
 
         # Connections Section
         st.markdown("#### Connections")
-        st.caption("For tasks: single next step. For decisions: multiple condition/next pairs.")
 
         # Parse existing connections
         existing_connections = []
@@ -344,22 +363,33 @@ if st.session_state.show_form:
 
         if activity_type == 'task':
             next_step = st.text_input("Next Activity (grid location)",
-                value=existing_connections[0].get('next', '') if existing_connections else '')
+                value=existing_connections[0].get('next', '') if existing_connections else '',
+                help="Enter the grid location of the next activity (e.g., A2)")
             connections_data = [{"next": next_step}] if next_step else []
         else:
+            # Decision branches
             st.markdown("**Decision Branches**")
-            num_branches = st.number_input("Number of branches", min_value=2, max_value=10, value=max(2, len(existing_connections)) if existing_connections else 2)
+            st.caption("Define the conditions and their corresponding next steps")
+
             connections_data = []
-            for i in range(int(num_branches)):
+            for i in range(st.session_state.decision_branches):
                 col1, col2 = st.columns(2)
+                default_conditions = ['Yes', 'No', 'Maybe', 'Escalate', 'Approve', 'Deny']
                 with col1:
-                    condition = st.text_input(f"Condition {i+1}",
-                        value=existing_connections[i].get('condition', '') if i < len(existing_connections) else '',
-                        key=f"cond_{i}")
+                    default_cond = default_conditions[i] if i < len(default_conditions) else ''
+                    condition = st.text_input(
+                        f"Condition {i+1}",
+                        value=existing_connections[i].get('condition', default_cond) if i < len(existing_connections) else default_cond,
+                        key=f"cond_{i}",
+                        placeholder="e.g., Approved, Denied"
+                    )
                 with col2:
-                    next_loc = st.text_input(f"Next {i+1}",
+                    next_loc = st.text_input(
+                        f"Next Activity {i+1}",
                         value=existing_connections[i].get('next', '') if i < len(existing_connections) else '',
-                        key=f"next_{i}")
+                        key=f"next_{i}",
+                        placeholder="e.g., B1"
+                    )
                 if condition or next_loc:
                     connections_data.append({"condition": condition, "next": next_loc})
 
@@ -379,7 +409,7 @@ if st.session_state.show_form:
             existing_task_time = existing.get('TASK_TIME_SIZE', '') if existing else ''
             task_time_idx = 0
             for i, opt in enumerate(task_time_options):
-                if opt.startswith(existing_task_time) and existing_task_time:
+                if opt.startswith(existing_task_time + ' ') and existing_task_time:
                     task_time_idx = i
                     break
             if existing and existing.get('TASK_TIME_CUSTOM') and not existing.get('TASK_TIME_SIZE'):
@@ -391,7 +421,7 @@ if st.session_state.show_form:
             task_time_custom = None
             task_time_midpoint = None
             if task_time_size == 'Other':
-                task_time_custom = st.number_input("Custom (minutes)", min_value=0.0,
+                task_time_custom = st.number_input("Custom value (minutes)", min_value=0.0,
                     value=float(existing.get('TASK_TIME_CUSTOM', 0)) if existing and existing.get('TASK_TIME_CUSTOM') else 0.0,
                     key="task_time_custom")
                 task_time_midpoint = task_time_custom
@@ -406,7 +436,7 @@ if st.session_state.show_form:
             existing_labor_rate = existing.get('LABOR_RATE_SIZE', '') if existing else ''
             labor_rate_idx = 0
             for i, opt in enumerate(labor_rate_options):
-                if opt.startswith(existing_labor_rate) and existing_labor_rate:
+                if opt.startswith(existing_labor_rate + ' ') and existing_labor_rate:
                     labor_rate_idx = i
                     break
             if existing and existing.get('LABOR_RATE_CUSTOM') and not existing.get('LABOR_RATE_SIZE'):
@@ -418,7 +448,7 @@ if st.session_state.show_form:
             labor_rate_custom = None
             labor_rate_midpoint = None
             if labor_rate_size == 'Other':
-                labor_rate_custom = st.number_input("Custom ($/hour)", min_value=0.0,
+                labor_rate_custom = st.number_input("Custom value ($/hour)", min_value=0.0,
                     value=float(existing.get('LABOR_RATE_CUSTOM', 0)) if existing and existing.get('LABOR_RATE_CUSTOM') else 0.0,
                     key="labor_rate_custom")
                 labor_rate_midpoint = labor_rate_custom
@@ -433,7 +463,7 @@ if st.session_state.show_form:
             existing_volume = existing.get('VOLUME_SIZE', '') if existing else ''
             volume_idx = 0
             for i, opt in enumerate(volume_options):
-                if opt.startswith(existing_volume) and existing_volume:
+                if opt.startswith(existing_volume + ' ') and existing_volume:
                     volume_idx = i
                     break
             if existing and existing.get('VOLUME_CUSTOM') and not existing.get('VOLUME_SIZE'):
@@ -445,14 +475,14 @@ if st.session_state.show_form:
             volume_custom = None
             volume_midpoint = None
             if volume_size == 'Other':
-                volume_custom = st.number_input("Custom (per month)", min_value=0.0,
+                volume_custom = st.number_input("Custom value (per month)", min_value=0.0,
                     value=float(existing.get('VOLUME_CUSTOM', 0)) if existing and existing.get('VOLUME_CUSTOM') else 0.0,
                     key="volume_custom")
                 volume_midpoint = volume_custom
             elif volume_size:
                 volume_midpoint = get_midpoint(tshirt_config, 'volume', volume_size)
                 if volume_midpoint:
-                    st.caption(f"Midpoint: {volume_midpoint}/mo")
+                    st.caption(f"Midpoint: {volume_midpoint:,.0f}/mo")
 
         # SLA Section
         st.markdown("#### SLA / Cycle Time")
@@ -524,9 +554,21 @@ if st.session_state.show_form:
 
         # Attachments Section
         st.markdown("#### Attachments")
-        st.caption("Enter as JSON array: [{\"name\": \"Doc Name\", \"url\": \"https://...\"}]")
-        attachments = st.text_area("Attachments (JSON)",
-            value=existing.get('ATTACHMENTS', '') if existing else '', height=60)
+
+        # Show existing attachments
+        if st.session_state.current_attachments:
+            st.markdown("**Current Attachments:**")
+            for att in st.session_state.current_attachments:
+                filepath = os.path.join(UPLOADS_DIR, att.get('filename', ''))
+                if os.path.exists(filepath):
+                    st.markdown(f"- {att.get('name', 'Unknown')}")
+
+        # File uploader
+        uploaded_files = st.file_uploader(
+            "Upload new files",
+            accept_multiple_files=True,
+            key="file_uploader"
+        )
 
         # Notes Section
         st.markdown("#### Notes")
@@ -555,15 +597,21 @@ if st.session_state.show_form:
         if submitted:
             if not activity_name:
                 st.error("Activity Name is required.")
+            elif not grid_location:
+                st.error("Grid Location is required.")
             else:
+                # Handle file uploads
+                attachments_list = list(st.session_state.current_attachments)
+                if uploaded_files:
+                    for uploaded_file in uploaded_files:
+                        file_info = save_uploaded_file(uploaded_file)
+                        attachments_list.append(file_info)
+
                 # Build data dict
                 data = {
-                    'engagement_id': engagement_id or None,
                     'activity_name': activity_name,
-                    'description': description or None,
                     'activity_type': activity_type,
-                    'swimlane': swimlane or None,
-                    'grid_location': grid_location or None,
+                    'grid_location': grid_location.upper(),
                     'connections': json.dumps(connections_data) if connections_data else None,
                     'task_time_size': task_time_size if task_time_size and task_time_size != 'Other' else None,
                     'task_time_midpoint': task_time_midpoint,
@@ -589,7 +637,7 @@ if st.session_state.show_form:
                     'constraints_rules': constraints_rules or None,
                     'opportunities': opportunities or None,
                     'next_steps': next_steps_text or None,
-                    'attachments': attachments or None,
+                    'attachments': json.dumps(attachments_list) if attachments_list else None,
                     'comments': comments or None,
                     'data_confidence': data_confidence or None,
                     'data_source': data_source or None,
@@ -600,6 +648,7 @@ if st.session_state.show_form:
                     st.success("Activity saved successfully!")
                     st.session_state.show_form = False
                     st.session_state.editing_id = None
+                    st.session_state.current_attachments = []
                     st.rerun()
                 except Exception as e:
                     st.error(f"Failed to save: {e}")
@@ -607,7 +656,16 @@ if st.session_state.show_form:
         if cancelled:
             st.session_state.show_form = False
             st.session_state.editing_id = None
+            st.session_state.current_attachments = []
             st.rerun()
+
+    # Add Branch button (outside form for decisions)
+    if activity_type == 'decision':
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("+ Add Branch"):
+                st.session_state.decision_branches += 1
+                st.rerun()
 
     # Delete button (outside form)
     if st.session_state.editing_id:
@@ -625,11 +683,12 @@ if st.session_state.show_form:
                         st.session_state.show_form = False
                         st.session_state.editing_id = None
                         st.session_state.delete_confirm = None
+                        st.session_state.current_attachments = []
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to delete: {e}")
             with col2:
-                if st.button("Cancel"):
+                if st.button("No, Cancel"):
                     st.session_state.delete_confirm = None
                     st.rerun()
         else:
