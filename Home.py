@@ -14,13 +14,13 @@ Welcome to the Voyage Consultant Tools suite. Select a tool from the sidebar to 
 ### Available Tools
 
 - **Snowflake Test** - Verify database connectivity and write test records
-- *More tools coming soon...*
+- **Activity Cards** - Create and manage activity cards for process mapping
 
 ---
 
 ### Roadmap
 
-- [ ] Activity Tracker - Track and decompose process activities
+- [x] Activity Cards - Track and decompose process activities
 - [ ] Process Map Viewer - Interactive process visualization
 - [ ] Business Case Calculator - ROI and savings analysis
 - [ ] Client Dashboard - Engagement metrics and progress
