@@ -18,6 +18,9 @@ CURRENT_USER = "app_user"
 UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
+# Swimlane letters to always show
+SWIMLANE_LETTERS = [chr(ord('A') + i) for i in range(10)]  # A through J
+
 # Connect to Snowflake
 def get_connection():
     return snowflake.connector.connect(
@@ -28,6 +31,31 @@ def get_connection():
         database=st.secrets["snowflake"]["database"],
         schema=st.secrets["snowflake"]["schema"]
     )
+
+# Load workflows
+def load_workflows():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, workflow_name, description FROM workflows ORDER BY workflow_name")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows
+
+# Create workflow
+def create_workflow(name, description):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO workflows (workflow_name, description, created_by)
+        VALUES (%s, %s, %s)
+    """, (name, description, CURRENT_USER))
+    cursor.execute("SELECT MAX(id) FROM workflows")
+    new_id = cursor.fetchone()[0]
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return new_id
 
 # Load t-shirt config from database
 @st.cache_data(ttl=300)
@@ -59,64 +87,70 @@ def load_tshirt_config():
         })
     return config
 
-# Load swimlane config
-def load_swimlane_config():
+# Load swimlane config for a workflow
+def load_swimlane_config(workflow_id):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT swimlane_letter, swimlane_name
         FROM swimlane_config
+        WHERE workflow_id = %s
         ORDER BY swimlane_letter
-    """)
+    """, (workflow_id,))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
     return {row[0]: row[1] for row in rows}
 
 # Save swimlane name
-def save_swimlane_name(letter, name):
+def save_swimlane_name(workflow_id, letter, name):
     conn = get_connection()
     cursor = conn.cursor()
     # Check if exists
-    cursor.execute("SELECT id FROM swimlane_config WHERE swimlane_letter = %s", (letter,))
+    cursor.execute("""
+        SELECT id FROM swimlane_config
+        WHERE workflow_id = %s AND swimlane_letter = %s
+    """, (workflow_id, letter))
     existing = cursor.fetchone()
     if existing:
         cursor.execute("""
             UPDATE swimlane_config
             SET swimlane_name = %s, modified_at = CURRENT_TIMESTAMP()
-            WHERE swimlane_letter = %s
-        """, (name, letter))
+            WHERE workflow_id = %s AND swimlane_letter = %s
+        """, (name, workflow_id, letter))
     else:
         cursor.execute("""
-            INSERT INTO swimlane_config (swimlane_letter, swimlane_name, display_order)
-            VALUES (%s, %s, %s)
-        """, (letter, name, ord(letter) - ord('A')))
+            INSERT INTO swimlane_config (workflow_id, swimlane_letter, swimlane_name, display_order)
+            VALUES (%s, %s, %s, %s)
+        """, (workflow_id, letter, name, ord(letter) - ord('A')))
     conn.commit()
     cursor.close()
     conn.close()
 
-# Load all activities
-def load_activities():
+# Load all activities for a workflow
+def load_activities(workflow_id):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, activity_name, activity_type, grid_location, status, created_at
         FROM activities
+        WHERE workflow_id = %s
         ORDER BY grid_location, activity_name
-    """)
+    """, (workflow_id,))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
     return rows
 
-# Load activities as grid map
-def load_activities_grid():
+# Load activities as grid map for a workflow
+def load_activities_grid(workflow_id):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, activity_name, activity_type, grid_location, connections
         FROM activities
-    """)
+        WHERE workflow_id = %s
+    """, (workflow_id,))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -159,7 +193,7 @@ def load_activity(activity_id):
     return None
 
 # Shift activities in a swimlane
-def shift_activities(swimlane_letter, from_position):
+def shift_activities(workflow_id, swimlane_letter, from_position):
     """Shift all activities in a swimlane from position onwards by +1"""
     conn = get_connection()
     cursor = conn.cursor()
@@ -168,9 +202,9 @@ def shift_activities(swimlane_letter, from_position):
     cursor.execute("""
         SELECT id, grid_location, connections
         FROM activities
-        WHERE grid_location LIKE %s
+        WHERE workflow_id = %s AND grid_location LIKE %s
         ORDER BY grid_location DESC
-    """, (f"{swimlane_letter}%",))
+    """, (workflow_id, f"{swimlane_letter}%"))
 
     activities_to_shift = []
     for row in cursor.fetchall():
@@ -203,7 +237,10 @@ def shift_activities(swimlane_letter, from_position):
 
     # Now update all connections that point to shifted locations
     if location_map:
-        cursor.execute("SELECT id, connections FROM activities WHERE connections IS NOT NULL")
+        cursor.execute("""
+            SELECT id, connections FROM activities
+            WHERE workflow_id = %s AND connections IS NOT NULL
+        """, (workflow_id,))
         for row in cursor.fetchall():
             activity_id = row[0]
             connections_str = row[1]
@@ -230,7 +267,7 @@ def shift_activities(swimlane_letter, from_position):
     return len(activities_to_shift)
 
 # Save activity
-def save_activity(data, activity_id=None):
+def save_activity(data, workflow_id, activity_id=None):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -296,7 +333,7 @@ def save_activity(data, activity_id=None):
         # Insert new
         cursor.execute("""
             INSERT INTO activities (
-                activity_name, activity_type, grid_location, connections,
+                workflow_id, activity_name, activity_type, grid_location, connections,
                 task_time_size, task_time_midpoint, task_time_custom,
                 labor_rate_size, labor_rate_midpoint, labor_rate_custom,
                 volume_size, volume_midpoint, volume_custom,
@@ -307,10 +344,10 @@ def save_activity(data, activity_id=None):
                 attachments, comments, data_confidence, data_source, created_by
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """, (
-            data['activity_name'], data['activity_type'], data['grid_location'],
+            workflow_id, data['activity_name'], data['activity_type'], data['grid_location'],
             data['connections'], data['task_time_size'], data['task_time_midpoint'],
             data['task_time_custom'], data['labor_rate_size'], data['labor_rate_midpoint'],
             data['labor_rate_custom'], data['volume_size'], data['volume_midpoint'],
@@ -406,6 +443,10 @@ if 'naming_swimlane' not in st.session_state:
     st.session_state.naming_swimlane = None
 if 'edit_swimlane_mode' not in st.session_state:
     st.session_state.edit_swimlane_mode = False
+if 'selected_workflow_id' not in st.session_state:
+    st.session_state.selected_workflow_id = None
+if 'creating_workflow' not in st.session_state:
+    st.session_state.creating_workflow = False
 
 # Load t-shirt config
 try:
@@ -414,51 +455,101 @@ except Exception as e:
     st.error(f"Failed to load t-shirt config: {e}")
     tshirt_config = {}
 
-# Load swimlane config
-try:
-    swimlane_names = load_swimlane_config()
-except Exception as e:
-    st.error(f"Failed to load swimlane config: {e}")
-    swimlane_names = {}
+# =====================
+# WORKFLOW SELECTOR
+# =====================
+st.markdown("### Select Workflow")
 
-# Load activities grid
-try:
-    activities_grid = load_activities_grid()
-except Exception as e:
-    st.error(f"Failed to load activities grid: {e}")
-    activities_grid = {}
+workflows = load_workflows()
+workflow_options = {w[0]: w[1] for w in workflows}  # id -> name
 
-# Determine grid dimensions
-def get_grid_dimensions(activities_grid, swimlane_names):
-    max_row = 'A'
+if st.session_state.creating_workflow:
+    # Show create workflow form
+    st.markdown("#### Create New Workflow")
+    new_wf_name = st.text_input("Workflow Name", key="new_workflow_name")
+    new_wf_desc = st.text_area("Description (optional)", key="new_workflow_desc", height=80)
+
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("Create", type="primary"):
+            if new_wf_name.strip():
+                new_id = create_workflow(new_wf_name.strip(), new_wf_desc.strip() if new_wf_desc else None)
+                st.session_state.selected_workflow_id = new_id
+                st.session_state.creating_workflow = False
+                st.rerun()
+            else:
+                st.error("Please enter a workflow name")
+    with col2:
+        if st.button("Cancel"):
+            st.session_state.creating_workflow = False
+            st.rerun()
+else:
+    # Show workflow dropdown
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if workflows:
+            # Build options list
+            options = ["-- Select a workflow --"] + [w[1] for w in workflows]
+
+            # Find current index
+            current_idx = 0
+            if st.session_state.selected_workflow_id:
+                for i, w in enumerate(workflows):
+                    if w[0] == st.session_state.selected_workflow_id:
+                        current_idx = i + 1
+                        break
+
+            selected = st.selectbox("Workflow", options, index=current_idx, label_visibility="collapsed")
+
+            if selected != "-- Select a workflow --":
+                # Find the workflow ID
+                for w in workflows:
+                    if w[1] == selected:
+                        if st.session_state.selected_workflow_id != w[0]:
+                            st.session_state.selected_workflow_id = w[0]
+                            # Reset form state when switching workflows
+                            st.session_state.show_form = False
+                            st.session_state.editing_id = None
+                            st.session_state.selected_grid = None
+                            st.rerun()
+                        break
+            else:
+                st.session_state.selected_workflow_id = None
+        else:
+            st.info("No workflows yet. Create one to get started.")
+
+    with col2:
+        if st.button("+ New Workflow"):
+            st.session_state.creating_workflow = True
+            st.rerun()
+
+# Only show rest of page if workflow is selected
+if not st.session_state.selected_workflow_id:
+    st.warning("Please select or create a workflow to continue.")
+    st.stop()
+
+# Load data for selected workflow
+workflow_id = st.session_state.selected_workflow_id
+swimlane_names = load_swimlane_config(workflow_id)
+activities_grid = load_activities_grid(workflow_id)
+
+# Determine grid dimensions based on activities
+def get_max_col(activities_grid):
     max_col = 1
-
-    # Check activities
     for loc in activities_grid.keys():
         letter, num = parse_grid_location(loc)
-        if letter and letter > max_row:
-            max_row = letter
         if num and num > max_col:
             max_col = num
+    return max_col
 
-    # Check swimlane config
-    for letter in swimlane_names.keys():
-        if letter > max_row:
-            max_row = letter
+max_col = get_max_col(activities_grid)
+cols_to_display = list(range(1, max(max_col + 2, 6)))  # At least 5 columns, plus one extra
 
-    # Add one extra row and column
-    next_row = chr(ord(max_row) + 1)
-    next_col = max_col + 1
+st.markdown("---")
 
-    return max_row, next_row, max_col, next_col
-
-max_row, next_row, max_col, next_col = get_grid_dimensions(activities_grid, swimlane_names)
-
-# Build list of rows to display (A through next_row)
-rows_to_display = [chr(ord('A') + i) for i in range(ord(next_row) - ord('A') + 1)]
-cols_to_display = list(range(1, next_col + 1))
-
-# Main content - Grid Picker Section
+# =====================
+# PROCESS GRID
+# =====================
 st.markdown("### Process Grid")
 
 # Swimlane edit mode toggle
@@ -468,7 +559,7 @@ with col2:
         st.session_state.edit_swimlane_mode = not st.session_state.edit_swimlane_mode
         st.rerun()
 
-# Swimlane naming dialog
+# Swimlane naming dialog (for grid cell clicks)
 if st.session_state.naming_swimlane:
     st.markdown(f"#### Name Swimlane {st.session_state.naming_swimlane}")
     new_name = st.text_input("Swimlane name:", key="new_swimlane_name",
@@ -477,15 +568,16 @@ if st.session_state.naming_swimlane:
     with col1:
         if st.button("Save Name", type="primary"):
             if new_name.strip():
-                save_swimlane_name(st.session_state.naming_swimlane, new_name.strip())
-                swimlane_names[st.session_state.naming_swimlane] = new_name.strip()
+                save_swimlane_name(workflow_id, st.session_state.naming_swimlane, new_name.strip())
                 st.session_state.naming_swimlane = None
+                st.session_state.show_form = True
                 st.rerun()
             else:
                 st.error("Please enter a name")
-    with col1:
-        if st.button("Cancel"):
+    with col2:
+        if st.button("Cancel##naming"):
             st.session_state.naming_swimlane = None
+            st.session_state.selected_grid = None
             st.rerun()
 
 # Conflict resolution dialog
@@ -497,9 +589,8 @@ if st.session_state.conflict_dialog:
     col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
     with col1:
         if st.button("Insert Here", type="primary", help="Shift existing activities to the right"):
-            # Perform shift
             letter, num = parse_grid_location(conflict['location'])
-            shifted = shift_activities(letter, num)
+            shifted = shift_activities(workflow_id, letter, num)
             st.session_state.selected_grid = conflict['location']
             st.session_state.conflict_dialog = None
             st.session_state.show_form = True
@@ -507,34 +598,39 @@ if st.session_state.conflict_dialog:
             st.rerun()
     with col2:
         if st.button("Replace", type="secondary", help="Delete existing and place new"):
-            # Delete existing activity
             delete_activity(conflict['existing_id'])
             st.session_state.selected_grid = conflict['location']
             st.session_state.conflict_dialog = None
             st.session_state.show_form = True
             st.rerun()
     with col3:
-        if st.button("Cancel"):
+        if st.button("Cancel##conflict"):
             st.session_state.conflict_dialog = None
             st.rerun()
     st.markdown("---")
 
-# Edit swimlanes mode
+# Edit swimlanes mode - show ALL letters A-J
 if st.session_state.edit_swimlane_mode:
     st.markdown("#### Edit Swimlane Names")
-    for row_letter in rows_to_display[:-1]:  # Exclude the empty row
-        current_name = swimlane_names.get(row_letter, '')
+    st.caption("Name your swimlanes (rows). Each workflow has its own swimlane names.")
+
+    for letter in SWIMLANE_LETTERS:
+        current_name = swimlane_names.get(letter, '')
         col1, col2, col3 = st.columns([1, 3, 1])
         with col1:
-            st.markdown(f"**{row_letter}**")
+            st.markdown(f"**{letter}**")
         with col2:
-            new_name = st.text_input(f"Name for {row_letter}", value=current_name,
-                                     key=f"edit_swimlane_{row_letter}", label_visibility="collapsed")
+            new_name = st.text_input(
+                f"Name for {letter}",
+                value=current_name,
+                key=f"edit_swimlane_{letter}",
+                label_visibility="collapsed",
+                placeholder="Click to name this swimlane"
+            )
         with col3:
-            if st.button("Save", key=f"save_swimlane_{row_letter}"):
-                if new_name.strip():
-                    save_swimlane_name(row_letter, new_name.strip())
-                    st.rerun()
+            if st.button("Save", key=f"save_swimlane_{letter}"):
+                save_swimlane_name(workflow_id, letter, new_name.strip() if new_name else '')
+                st.rerun()
 else:
     # Visual Grid Picker
     # Header row with column numbers
@@ -543,18 +639,34 @@ else:
     for i, col_num in enumerate(cols_to_display):
         header_cols[i + 1].markdown(f"**{col_num}**")
 
+    # Determine which rows to show (named ones + any with activities + 2 extra)
+    rows_with_activities = set()
+    for loc in activities_grid.keys():
+        letter, _ = parse_grid_location(loc)
+        if letter:
+            rows_with_activities.add(letter)
+
+    rows_with_names = set(swimlane_names.keys())
+
+    # Show rows up to max used + 2, minimum A-D
+    all_used_rows = rows_with_activities | rows_with_names
+    if all_used_rows:
+        max_row_ord = max(ord(r) for r in all_used_rows)
+        last_row_to_show = chr(min(max_row_ord + 2, ord('J')))
+    else:
+        last_row_to_show = 'D'
+
+    rows_to_display = [chr(ord('A') + i) for i in range(ord(last_row_to_show) - ord('A') + 1)]
+
     # Grid rows
     for row_letter in rows_to_display:
         row_cols = st.columns([2] + [1] * len(cols_to_display))
 
         # Swimlane label
         swimlane_name = swimlane_names.get(row_letter, '')
-        is_last_row = row_letter == rows_to_display[-1]
 
         if swimlane_name:
             label = f"**{row_letter}** - {swimlane_name}"
-        elif is_last_row:
-            label = f"**{row_letter}** - *(new swimlane)*"
         else:
             label = f"**{row_letter}** - *(unnamed)*"
 
@@ -568,10 +680,9 @@ else:
             with row_cols[i + 1]:
                 if cell_data:
                     # Occupied cell
-                    btn_label = f"🔵"
+                    btn_label = "🔵"
                     help_text = f"{cell_data['name']} ({cell_data['type']})"
                     if st.button(btn_label, key=f"grid_{grid_loc}", help=help_text, use_container_width=True):
-                        # Check if we're in "new activity" mode or just viewing
                         if st.session_state.show_form and not st.session_state.editing_id:
                             # Trying to place new activity on occupied cell
                             st.session_state.conflict_dialog = {
@@ -585,7 +696,6 @@ else:
                             st.session_state.editing_id = cell_data['id']
                             st.session_state.selected_grid = grid_loc
                             st.session_state.show_form = True
-                            # Load existing attachments
                             existing = load_activity(cell_data['id'])
                             if existing and existing.get('ATTACHMENTS'):
                                 try:
@@ -604,14 +714,9 @@ else:
                 else:
                     # Empty cell
                     if st.button("⬜", key=f"grid_{grid_loc}", use_container_width=True):
-                        # Check if this is an unnamed swimlane
-                        if row_letter not in swimlane_names and not is_last_row:
-                            # Existing row but unnamed - prompt to name it
-                            st.session_state.naming_swimlane = row_letter
-                            st.session_state.selected_grid = grid_loc
-                            st.rerun()
-                        elif is_last_row:
-                            # New swimlane row - prompt to name it
+                        # Check if swimlane is named
+                        if row_letter not in swimlane_names:
+                            # Prompt to name it first
                             st.session_state.naming_swimlane = row_letter
                             st.session_state.selected_grid = grid_loc
                             st.rerun()
@@ -644,10 +749,9 @@ if not st.session_state.show_form:
 st.markdown("---")
 st.markdown("### Activity List")
 try:
-    activities = load_activities()
+    activities = load_activities(workflow_id)
 
     if activities:
-        # Table header
         cols = st.columns([1, 3, 2, 2, 2, 1])
         cols[0].markdown("**ID**")
         cols[1].markdown("**Name**")
@@ -685,7 +789,7 @@ try:
                         st.session_state.decision_branches = 2
                 st.rerun()
     else:
-        st.info("No activities found. Click a cell on the grid to create one.")
+        st.info("No activities in this workflow yet. Click a cell on the grid to create one.")
 except Exception as e:
     st.error(f"Failed to load activities: {e}")
 
@@ -693,7 +797,6 @@ except Exception as e:
 if st.session_state.show_form and not st.session_state.naming_swimlane and not st.session_state.conflict_dialog:
     st.markdown("---")
 
-    # Load existing data if editing
     existing = None
     if st.session_state.editing_id:
         existing = load_activity(st.session_state.editing_id)
@@ -713,14 +816,12 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
             activity_type = st.selectbox("Type*", ['task', 'decision'],
                 index=['task', 'decision'].index(existing.get('ACTIVITY_TYPE', 'task')) if existing and existing.get('ACTIVITY_TYPE') else 0)
         with col3:
-            # Grid location display (read-only, set by grid picker)
             grid_loc = st.session_state.selected_grid or (existing.get('GRID_LOCATION', '') if existing else '')
             st.text_input("Grid Location", value=grid_loc, disabled=True)
 
         # Connections Section
         st.markdown("#### Connections")
 
-        # Parse existing connections
         existing_connections = []
         if existing and existing.get('CONNECTIONS'):
             try:
@@ -734,7 +835,6 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
                 help="Enter the grid location of the next activity (e.g., A2)")
             connections_data = [{"next": next_step}] if next_step else []
         else:
-            # Decision branches
             st.markdown("**Decision Branches**")
             st.caption("Define the conditions and their corresponding next steps")
 
@@ -966,7 +1066,6 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
             elif not grid_location:
                 st.error("Please select a grid location from the grid above.")
             else:
-                # Handle file uploads
                 attachments_list = list(st.session_state.current_attachments)
                 if uploaded_files:
                     for uploaded_file in uploaded_files:
@@ -1009,7 +1108,7 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
                 }
 
                 try:
-                    save_activity(data, st.session_state.editing_id)
+                    save_activity(data, workflow_id, st.session_state.editing_id)
                     st.success("Activity saved successfully!")
                     st.session_state.show_form = False
                     st.session_state.editing_id = None
@@ -1056,7 +1155,7 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
                     except Exception as e:
                         st.error(f"Failed to delete: {e}")
             with col2:
-                if st.button("No, Cancel"):
+                if st.button("No, Cancel##delete"):
                     st.session_state.delete_confirm = None
                     st.rerun()
         else:
