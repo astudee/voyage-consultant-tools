@@ -3,8 +3,8 @@
 .snowsql/
 snowsql_config
 
-# Uploaded files
-uploads/
+# User uploaded files (Activity Cards attachments)
+user_uploads/
 
 # Python
 __pycache__/

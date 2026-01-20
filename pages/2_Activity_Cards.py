@@ -13,8 +13,8 @@ st.markdown("Create and manage activity cards for process mapping.")
 # Current user (hardcoded for now)
 CURRENT_USER = "app_user"
 
-# Uploads directory
-UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+# Uploads directory for user attachments
+UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 # Connect to Snowflake
