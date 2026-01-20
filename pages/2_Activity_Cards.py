@@ -3,6 +3,7 @@ import snowflake.connector
 import json
 import os
 import uuid
+import re
 from datetime import datetime
 
 st.set_page_config(page_title="Activity Cards", page_icon="📋", layout="wide")
@@ -58,6 +59,42 @@ def load_tshirt_config():
         })
     return config
 
+# Load swimlane config
+def load_swimlane_config():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT swimlane_letter, swimlane_name
+        FROM swimlane_config
+        ORDER BY swimlane_letter
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return {row[0]: row[1] for row in rows}
+
+# Save swimlane name
+def save_swimlane_name(letter, name):
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Check if exists
+    cursor.execute("SELECT id FROM swimlane_config WHERE swimlane_letter = %s", (letter,))
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute("""
+            UPDATE swimlane_config
+            SET swimlane_name = %s, modified_at = CURRENT_TIMESTAMP()
+            WHERE swimlane_letter = %s
+        """, (name, letter))
+    else:
+        cursor.execute("""
+            INSERT INTO swimlane_config (swimlane_letter, swimlane_name, display_order)
+            VALUES (%s, %s, %s)
+        """, (letter, name, ord(letter) - ord('A')))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 # Load all activities
 def load_activities():
     conn = get_connection()
@@ -72,6 +109,42 @@ def load_activities():
     conn.close()
     return rows
 
+# Load activities as grid map
+def load_activities_grid():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, activity_name, activity_type, grid_location, connections
+        FROM activities
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    grid = {}
+    for row in rows:
+        if row[3]:  # grid_location
+            grid[row[3].upper()] = {
+                'id': row[0],
+                'name': row[1],
+                'type': row[2],
+                'connections': row[4]
+            }
+    return grid
+
+# Parse grid location into letter and number
+def parse_grid_location(loc):
+    if not loc:
+        return None, None
+    match = re.match(r'([A-Z]+)(\d+)', loc.upper())
+    if match:
+        return match.group(1), int(match.group(2))
+    return None, None
+
+# Build grid location from letter and number
+def build_grid_location(letter, number):
+    return f"{letter}{number}"
+
 # Load single activity
 def load_activity(activity_id):
     conn = get_connection()
@@ -84,6 +157,77 @@ def load_activity(activity_id):
     if row:
         return dict(zip(columns, row))
     return None
+
+# Shift activities in a swimlane
+def shift_activities(swimlane_letter, from_position):
+    """Shift all activities in a swimlane from position onwards by +1"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get all activities in this swimlane at or after the position
+    cursor.execute("""
+        SELECT id, grid_location, connections
+        FROM activities
+        WHERE grid_location LIKE %s
+        ORDER BY grid_location DESC
+    """, (f"{swimlane_letter}%",))
+
+    activities_to_shift = []
+    for row in cursor.fetchall():
+        letter, num = parse_grid_location(row[1])
+        if num and num >= from_position:
+            activities_to_shift.append({
+                'id': row[0],
+                'old_location': row[1],
+                'new_location': build_grid_location(letter, num + 1),
+                'old_num': num,
+                'new_num': num + 1
+            })
+
+    # Build mapping of old -> new locations for connection updates
+    location_map = {a['old_location']: a['new_location'] for a in activities_to_shift}
+
+    # Update grid locations (do in reverse order to avoid conflicts)
+    for activity in activities_to_shift:
+        cursor.execute("""
+            UPDATE activities
+            SET grid_location = %s, modified_at = CURRENT_TIMESTAMP(), modified_by = %s
+            WHERE id = %s
+        """, (activity['new_location'], CURRENT_USER, activity['id']))
+
+        # Log the shift
+        cursor.execute("""
+            INSERT INTO activity_audit_log (activity_id, action, field_changed, old_value, new_value, changed_by)
+            VALUES (%s, 'SHIFT', 'grid_location', %s, %s, %s)
+        """, (activity['id'], activity['old_location'], activity['new_location'], CURRENT_USER))
+
+    # Now update all connections that point to shifted locations
+    if location_map:
+        cursor.execute("SELECT id, connections FROM activities WHERE connections IS NOT NULL")
+        for row in cursor.fetchall():
+            activity_id = row[0]
+            connections_str = row[1]
+            if connections_str:
+                try:
+                    connections = json.loads(connections_str)
+                    updated = False
+                    for conn_item in connections:
+                        if 'next' in conn_item and conn_item['next'] in location_map:
+                            conn_item['next'] = location_map[conn_item['next']]
+                            updated = True
+                    if updated:
+                        cursor.execute("""
+                            UPDATE activities
+                            SET connections = %s, modified_at = CURRENT_TIMESTAMP(), modified_by = %s
+                            WHERE id = %s
+                        """, (json.dumps(connections), CURRENT_USER, activity_id))
+                except json.JSONDecodeError:
+                    pass
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return len(activities_to_shift)
 
 # Save activity
 def save_activity(data, activity_id=None):
@@ -254,6 +398,14 @@ if 'decision_branches' not in st.session_state:
     st.session_state.decision_branches = 2
 if 'current_attachments' not in st.session_state:
     st.session_state.current_attachments = []
+if 'selected_grid' not in st.session_state:
+    st.session_state.selected_grid = None
+if 'conflict_dialog' not in st.session_state:
+    st.session_state.conflict_dialog = None
+if 'naming_swimlane' not in st.session_state:
+    st.session_state.naming_swimlane = None
+if 'edit_swimlane_mode' not in st.session_state:
+    st.session_state.edit_swimlane_mode = False
 
 # Load t-shirt config
 try:
@@ -262,18 +414,235 @@ except Exception as e:
     st.error(f"Failed to load t-shirt config: {e}")
     tshirt_config = {}
 
-# Main content
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.markdown("### Activities")
+# Load swimlane config
+try:
+    swimlane_names = load_swimlane_config()
+except Exception as e:
+    st.error(f"Failed to load swimlane config: {e}")
+    swimlane_names = {}
+
+# Load activities grid
+try:
+    activities_grid = load_activities_grid()
+except Exception as e:
+    st.error(f"Failed to load activities grid: {e}")
+    activities_grid = {}
+
+# Determine grid dimensions
+def get_grid_dimensions(activities_grid, swimlane_names):
+    max_row = 'A'
+    max_col = 1
+
+    # Check activities
+    for loc in activities_grid.keys():
+        letter, num = parse_grid_location(loc)
+        if letter and letter > max_row:
+            max_row = letter
+        if num and num > max_col:
+            max_col = num
+
+    # Check swimlane config
+    for letter in swimlane_names.keys():
+        if letter > max_row:
+            max_row = letter
+
+    # Add one extra row and column
+    next_row = chr(ord(max_row) + 1)
+    next_col = max_col + 1
+
+    return max_row, next_row, max_col, next_col
+
+max_row, next_row, max_col, next_col = get_grid_dimensions(activities_grid, swimlane_names)
+
+# Build list of rows to display (A through next_row)
+rows_to_display = [chr(ord('A') + i) for i in range(ord(next_row) - ord('A') + 1)]
+cols_to_display = list(range(1, next_col + 1))
+
+# Main content - Grid Picker Section
+st.markdown("### Process Grid")
+
+# Swimlane edit mode toggle
+col1, col2 = st.columns([6, 1])
 with col2:
+    if st.button("Edit Swimlanes" if not st.session_state.edit_swimlane_mode else "Done Editing"):
+        st.session_state.edit_swimlane_mode = not st.session_state.edit_swimlane_mode
+        st.rerun()
+
+# Swimlane naming dialog
+if st.session_state.naming_swimlane:
+    st.markdown(f"#### Name Swimlane {st.session_state.naming_swimlane}")
+    new_name = st.text_input("Swimlane name:", key="new_swimlane_name",
+                              placeholder="e.g., Mail Room, Claims Processing")
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("Save Name", type="primary"):
+            if new_name.strip():
+                save_swimlane_name(st.session_state.naming_swimlane, new_name.strip())
+                swimlane_names[st.session_state.naming_swimlane] = new_name.strip()
+                st.session_state.naming_swimlane = None
+                st.rerun()
+            else:
+                st.error("Please enter a name")
+    with col1:
+        if st.button("Cancel"):
+            st.session_state.naming_swimlane = None
+            st.rerun()
+
+# Conflict resolution dialog
+if st.session_state.conflict_dialog:
+    conflict = st.session_state.conflict_dialog
+    st.markdown("---")
+    st.warning(f"**{conflict['location']}** is occupied by **'{conflict['existing_name']}'**")
+
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+    with col1:
+        if st.button("Insert Here", type="primary", help="Shift existing activities to the right"):
+            # Perform shift
+            letter, num = parse_grid_location(conflict['location'])
+            shifted = shift_activities(letter, num)
+            st.session_state.selected_grid = conflict['location']
+            st.session_state.conflict_dialog = None
+            st.session_state.show_form = True
+            st.success(f"Shifted {shifted} activities. Now placing new activity at {conflict['location']}.")
+            st.rerun()
+    with col2:
+        if st.button("Replace", type="secondary", help="Delete existing and place new"):
+            # Delete existing activity
+            delete_activity(conflict['existing_id'])
+            st.session_state.selected_grid = conflict['location']
+            st.session_state.conflict_dialog = None
+            st.session_state.show_form = True
+            st.rerun()
+    with col3:
+        if st.button("Cancel"):
+            st.session_state.conflict_dialog = None
+            st.rerun()
+    st.markdown("---")
+
+# Edit swimlanes mode
+if st.session_state.edit_swimlane_mode:
+    st.markdown("#### Edit Swimlane Names")
+    for row_letter in rows_to_display[:-1]:  # Exclude the empty row
+        current_name = swimlane_names.get(row_letter, '')
+        col1, col2, col3 = st.columns([1, 3, 1])
+        with col1:
+            st.markdown(f"**{row_letter}**")
+        with col2:
+            new_name = st.text_input(f"Name for {row_letter}", value=current_name,
+                                     key=f"edit_swimlane_{row_letter}", label_visibility="collapsed")
+        with col3:
+            if st.button("Save", key=f"save_swimlane_{row_letter}"):
+                if new_name.strip():
+                    save_swimlane_name(row_letter, new_name.strip())
+                    st.rerun()
+else:
+    # Visual Grid Picker
+    # Header row with column numbers
+    header_cols = st.columns([2] + [1] * len(cols_to_display))
+    header_cols[0].markdown("**Swimlane**")
+    for i, col_num in enumerate(cols_to_display):
+        header_cols[i + 1].markdown(f"**{col_num}**")
+
+    # Grid rows
+    for row_letter in rows_to_display:
+        row_cols = st.columns([2] + [1] * len(cols_to_display))
+
+        # Swimlane label
+        swimlane_name = swimlane_names.get(row_letter, '')
+        is_last_row = row_letter == rows_to_display[-1]
+
+        if swimlane_name:
+            label = f"**{row_letter}** - {swimlane_name}"
+        elif is_last_row:
+            label = f"**{row_letter}** - *(new swimlane)*"
+        else:
+            label = f"**{row_letter}** - *(unnamed)*"
+
+        row_cols[0].markdown(label)
+
+        # Grid cells
+        for i, col_num in enumerate(cols_to_display):
+            grid_loc = build_grid_location(row_letter, col_num)
+            cell_data = activities_grid.get(grid_loc)
+
+            with row_cols[i + 1]:
+                if cell_data:
+                    # Occupied cell
+                    btn_label = f"🔵"
+                    help_text = f"{cell_data['name']} ({cell_data['type']})"
+                    if st.button(btn_label, key=f"grid_{grid_loc}", help=help_text, use_container_width=True):
+                        # Check if we're in "new activity" mode or just viewing
+                        if st.session_state.show_form and not st.session_state.editing_id:
+                            # Trying to place new activity on occupied cell
+                            st.session_state.conflict_dialog = {
+                                'location': grid_loc,
+                                'existing_id': cell_data['id'],
+                                'existing_name': cell_data['name']
+                            }
+                            st.rerun()
+                        else:
+                            # Edit existing activity
+                            st.session_state.editing_id = cell_data['id']
+                            st.session_state.selected_grid = grid_loc
+                            st.session_state.show_form = True
+                            # Load existing attachments
+                            existing = load_activity(cell_data['id'])
+                            if existing and existing.get('ATTACHMENTS'):
+                                try:
+                                    st.session_state.current_attachments = json.loads(existing.get('ATTACHMENTS', '[]'))
+                                except:
+                                    st.session_state.current_attachments = []
+                            else:
+                                st.session_state.current_attachments = []
+                            if existing and existing.get('CONNECTIONS'):
+                                try:
+                                    conns = json.loads(existing.get('CONNECTIONS', '[]'))
+                                    st.session_state.decision_branches = max(2, len(conns))
+                                except:
+                                    st.session_state.decision_branches = 2
+                            st.rerun()
+                else:
+                    # Empty cell
+                    if st.button("⬜", key=f"grid_{grid_loc}", use_container_width=True):
+                        # Check if this is an unnamed swimlane
+                        if row_letter not in swimlane_names and not is_last_row:
+                            # Existing row but unnamed - prompt to name it
+                            st.session_state.naming_swimlane = row_letter
+                            st.session_state.selected_grid = grid_loc
+                            st.rerun()
+                        elif is_last_row:
+                            # New swimlane row - prompt to name it
+                            st.session_state.naming_swimlane = row_letter
+                            st.session_state.selected_grid = grid_loc
+                            st.rerun()
+                        else:
+                            # Named swimlane, proceed with selection
+                            st.session_state.selected_grid = grid_loc
+                            st.session_state.show_form = True
+                            st.session_state.editing_id = None
+                            st.session_state.decision_branches = 2
+                            st.session_state.current_attachments = []
+                            st.rerun()
+
+# Show selected location
+if st.session_state.selected_grid and not st.session_state.naming_swimlane:
+    letter, num = parse_grid_location(st.session_state.selected_grid)
+    swimlane_name = swimlane_names.get(letter, 'Unnamed')
+    st.info(f"**Selected: {st.session_state.selected_grid}** ({swimlane_name}, Step {num})")
+
+# New Activity button
+if not st.session_state.show_form:
     if st.button("+ New Activity", type="primary"):
         st.session_state.show_form = True
         st.session_state.editing_id = None
         st.session_state.decision_branches = 2
         st.session_state.current_attachments = []
+        st.session_state.selected_grid = None
+        st.info("Click a cell on the grid above to select where to place the activity.")
 
 # List view
+st.markdown("---")
+st.markdown("### Activity List")
 try:
     activities = load_activities()
 
@@ -299,7 +668,7 @@ try:
             if cols[5].button("Edit", key=f"edit_{activity[0]}"):
                 st.session_state.editing_id = activity[0]
                 st.session_state.show_form = True
-                # Load existing attachments
+                st.session_state.selected_grid = activity[3]
                 existing = load_activity(activity[0])
                 if existing and existing.get('ATTACHMENTS'):
                     try:
@@ -308,7 +677,6 @@ try:
                         st.session_state.current_attachments = []
                 else:
                     st.session_state.current_attachments = []
-                # Load existing branches count
                 if existing and existing.get('CONNECTIONS'):
                     try:
                         conns = json.loads(existing.get('CONNECTIONS', '[]'))
@@ -317,13 +685,13 @@ try:
                         st.session_state.decision_branches = 2
                 st.rerun()
     else:
-        st.info("No activities found. Click 'New Activity' to create one.")
+        st.info("No activities found. Click a cell on the grid to create one.")
 except Exception as e:
     st.error(f"Failed to load activities: {e}")
 
 # Form for add/edit
-if st.session_state.show_form:
-    st.divider()
+if st.session_state.show_form and not st.session_state.naming_swimlane and not st.session_state.conflict_dialog:
+    st.markdown("---")
 
     # Load existing data if editing
     existing = None
@@ -332,23 +700,22 @@ if st.session_state.show_form:
         st.markdown(f"### Edit Activity #{st.session_state.editing_id}")
     else:
         st.markdown("### New Activity")
+        if not st.session_state.selected_grid:
+            st.warning("Please select a grid location above before filling out the form.")
 
     with st.form("activity_form"):
         # Basic Info Section
         st.markdown("#### Basic Info")
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
             activity_name = st.text_input("Activity Name*", value=existing.get('ACTIVITY_NAME', '') if existing else '', max_chars=100)
         with col2:
             activity_type = st.selectbox("Type*", ['task', 'decision'],
                 index=['task', 'decision'].index(existing.get('ACTIVITY_TYPE', 'task')) if existing and existing.get('ACTIVITY_TYPE') else 0)
-
-        grid_location = st.text_input(
-            "Grid Location*",
-            value=existing.get('GRID_LOCATION', '') if existing else '',
-            max_chars=10,
-            help="Letter = swimlane row, Number = sequence (e.g., A1 = Swimlane A, Step 1)"
-        )
+        with col3:
+            # Grid location display (read-only, set by grid picker)
+            grid_loc = st.session_state.selected_grid or (existing.get('GRID_LOCATION', '') if existing else '')
+            st.text_input("Grid Location", value=grid_loc, disabled=True)
 
         # Connections Section
         st.markdown("#### Connections")
@@ -396,7 +763,6 @@ if st.session_state.show_form:
         # Time & Cost Section
         st.markdown("#### Time & Cost")
 
-        # Build size options
         def build_size_options(category):
             options = [''] + [f"{item['size']} - {item['label']}" for item in tshirt_config.get(category, [])] + ['Other']
             return options
@@ -413,7 +779,7 @@ if st.session_state.show_form:
                     task_time_idx = i
                     break
             if existing and existing.get('TASK_TIME_CUSTOM') and not existing.get('TASK_TIME_SIZE'):
-                task_time_idx = len(task_time_options) - 1  # Other
+                task_time_idx = len(task_time_options) - 1
 
             task_time_size_full = st.selectbox("Size", task_time_options, index=task_time_idx, key="task_time_size")
             task_time_size = task_time_size_full.split(' - ')[0] if ' - ' in task_time_size_full else task_time_size_full
@@ -555,7 +921,6 @@ if st.session_state.show_form:
         # Attachments Section
         st.markdown("#### Attachments")
 
-        # Show existing attachments
         if st.session_state.current_attachments:
             st.markdown("**Current Attachments:**")
             for att in st.session_state.current_attachments:
@@ -563,7 +928,6 @@ if st.session_state.show_form:
                 if os.path.exists(filepath):
                     st.markdown(f"- {att.get('name', 'Unknown')}")
 
-        # File uploader
         uploaded_files = st.file_uploader(
             "Upload new files",
             accept_multiple_files=True,
@@ -595,10 +959,12 @@ if st.session_state.show_form:
             cancelled = st.form_submit_button("Cancel")
 
         if submitted:
+            grid_location = st.session_state.selected_grid or (existing.get('GRID_LOCATION', '') if existing else '')
+
             if not activity_name:
                 st.error("Activity Name is required.")
             elif not grid_location:
-                st.error("Grid Location is required.")
+                st.error("Please select a grid location from the grid above.")
             else:
                 # Handle file uploads
                 attachments_list = list(st.session_state.current_attachments)
@@ -607,7 +973,6 @@ if st.session_state.show_form:
                         file_info = save_uploaded_file(uploaded_file)
                         attachments_list.append(file_info)
 
-                # Build data dict
                 data = {
                     'activity_name': activity_name,
                     'activity_type': activity_type,
@@ -649,6 +1014,7 @@ if st.session_state.show_form:
                     st.session_state.show_form = False
                     st.session_state.editing_id = None
                     st.session_state.current_attachments = []
+                    st.session_state.selected_grid = None
                     st.rerun()
                 except Exception as e:
                     st.error(f"Failed to save: {e}")
@@ -657,6 +1023,7 @@ if st.session_state.show_form:
             st.session_state.show_form = False
             st.session_state.editing_id = None
             st.session_state.current_attachments = []
+            st.session_state.selected_grid = None
             st.rerun()
 
     # Add Branch button (outside form for decisions)
@@ -684,6 +1051,7 @@ if st.session_state.show_form:
                         st.session_state.editing_id = None
                         st.session_state.delete_confirm = None
                         st.session_state.current_attachments = []
+                        st.session_state.selected_grid = None
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to delete: {e}")
