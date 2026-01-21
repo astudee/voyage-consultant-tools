@@ -2,9 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useSettings } from '@/lib/SettingsContext';
 import { useWorkflow } from '@/lib/WorkflowContext';
+
+// Voyage Advisory brand colors
+const brandColors = {
+  darkCharcoal: '#333333',
+  darkBlue: '#336699',
+  mediumBlue: '#6699cc',
+  teal: '#669999',
+  gray: '#999999',
+};
 
 const navItems = [
   { href: '/workflows', label: 'Workflows', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
@@ -20,16 +30,23 @@ export default function Sidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <aside className="w-56 bg-gray-900 text-white flex flex-col">
-      <div className="p-4 border-b border-gray-700">
-        <h1 className="text-lg font-bold">Voyage Tools</h1>
-        <p className="text-xs text-gray-400">Process Mapping</p>
+    <aside className="w-56 text-white flex flex-col" style={{ backgroundColor: brandColors.darkCharcoal }}>
+      <div className="p-4 border-b" style={{ borderColor: brandColors.darkBlue }}>
+        <Image
+          src="/voyage-logo.png"
+          alt="Voyage Advisory"
+          width={180}
+          height={60}
+          className="mb-2"
+          priority
+        />
+        <p className="text-xs" style={{ color: brandColors.gray }}>Process Mapping Tools</p>
       </div>
 
       {/* Current Workflow Indicator */}
       {selectedWorkflow && (
-        <div className="px-4 py-2 bg-gray-800 border-b border-gray-700">
-          <p className="text-xs text-gray-400">Current Workflow</p>
+        <div className="px-4 py-2 border-b" style={{ backgroundColor: brandColors.darkBlue + '33', borderColor: brandColors.darkBlue }}>
+          <p className="text-xs" style={{ color: brandColors.gray }}>Current Workflow</p>
           <p className="text-sm font-medium text-white truncate">{selectedWorkflow.workflow_name}</p>
         </div>
       )}
@@ -43,11 +60,23 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+              style={{
+                backgroundColor: isActive ? brandColors.darkBlue : 'transparent',
+                color: isActive ? 'white' : brandColors.gray,
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = brandColors.darkBlue + '66';
+                  e.currentTarget.style.color = 'white';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = brandColors.gray;
+                }
+              }}
             >
               <svg
                 className="w-5 h-5"
@@ -69,10 +98,11 @@ export default function Sidebar() {
       </nav>
 
       {/* Settings Section */}
-      <div className="border-t border-gray-700">
+      <div className="border-t" style={{ borderColor: brandColors.darkBlue }}>
         <button
           onClick={() => setSettingsOpen(!settingsOpen)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 transition-colors"
+          className="w-full flex items-center justify-between px-4 py-3 text-sm transition-colors hover:opacity-80"
+          style={{ color: brandColors.gray }}
         >
           <span className="flex items-center gap-3">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,7 +134,7 @@ export default function Sidebar() {
         {settingsOpen && (
           <div className="px-4 pb-4 space-y-3">
             <div>
-              <label className="block text-xs text-gray-400 mb-1">
+              <label className="block text-xs mb-1" style={{ color: brandColors.gray }}>
                 Productivity Rate
               </label>
               <div className="flex items-center gap-2">
@@ -117,14 +147,15 @@ export default function Sidebar() {
                   }}
                   min="0"
                   max="100"
-                  className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                  className="w-16 rounded px-2 py-1 text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: brandColors.darkBlue + '66', borderColor: brandColors.darkBlue, border: '1px solid' }}
                 />
-                <span className="text-xs text-gray-400">%</span>
+                <span className="text-xs" style={{ color: brandColors.gray }}>%</span>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs text-gray-400 mb-1">
+              <label className="block text-xs mb-1" style={{ color: brandColors.gray }}>
                 Work Hours / Year
               </label>
               <input
@@ -135,12 +166,13 @@ export default function Sidebar() {
                   updateSettings({ hours_per_year: Math.max(0, val) });
                 }}
                 min="0"
-                className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full rounded px-2 py-1 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: brandColors.darkBlue + '66', borderColor: brandColors.darkBlue, border: '1px solid' }}
               />
             </div>
 
             <div>
-              <label className="block text-xs text-gray-400 mb-1">
+              <label className="block text-xs mb-1" style={{ color: brandColors.gray }}>
                 Training & Meetings / Year
               </label>
               <input
@@ -151,12 +183,13 @@ export default function Sidebar() {
                   updateSettings({ training_hours_per_year: Math.max(0, val) });
                 }}
                 min="0"
-                className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full rounded px-2 py-1 text-sm text-white focus:outline-none"
+                style={{ backgroundColor: brandColors.darkBlue + '66', borderColor: brandColors.darkBlue, border: '1px solid' }}
               />
             </div>
 
-            <div className="pt-2 border-t border-gray-700">
-              <p className="text-xs text-gray-500">
+            <div className="pt-2 border-t" style={{ borderColor: brandColors.darkBlue }}>
+              <p className="text-xs" style={{ color: brandColors.teal }}>
                 Effective: {workHoursPerMonth.toFixed(0)} hrs/month
               </p>
             </div>
@@ -164,7 +197,7 @@ export default function Sidebar() {
         )}
       </div>
 
-      <div className="p-4 border-t border-gray-700 text-xs text-gray-500">
+      <div className="p-4 border-t text-xs" style={{ borderColor: brandColors.darkBlue, color: brandColors.gray }}>
         <p>v1.0.0</p>
       </div>
     </aside>
