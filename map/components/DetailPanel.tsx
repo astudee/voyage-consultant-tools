@@ -111,7 +111,7 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
         <div className="flex items-center gap-2">
           <Link
             href={`/activities/${activity.id}`}
-            className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
+            className="text-sm btn-primary px-3 py-1 rounded"
           >
             Edit
           </Link>
@@ -168,7 +168,7 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
                     </span>
                   )}
                   <span className="text-gray-400">&rarr;</span>
-                  <span className="text-blue-600 font-medium">{conn.next || '-'}</span>
+                  <span className="link-primary font-medium">{conn.next || '-'}</span>
                 </div>
               ))}
             </div>

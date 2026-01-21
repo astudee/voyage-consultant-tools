@@ -120,7 +120,7 @@ export default function WorkflowsPage() {
         {!showNewForm && (
           <button
             onClick={() => setShowNewForm(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+            className="btn-primary px-4 py-2 rounded-md text-sm  transition-colors"
           >
             + New Workflow
           </button>
@@ -160,7 +160,7 @@ export default function WorkflowsPage() {
             <button
               onClick={handleCreate}
               disabled={creating || !newName.trim()}
-              className="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="btn-primary px-4 py-1.5 rounded-md text-sm  transition-colors disabled:opacity-50"
             >
               {creating ? 'Creating...' : 'Create'}
             </button>
@@ -198,7 +198,7 @@ export default function WorkflowsPage() {
             <p className="mt-2">Create a workflow to get started with process mapping.</p>
             <button
               onClick={() => setShowNewForm(true)}
-              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700"
+              className="mt-4 btn-primary px-4 py-2 rounded-md text-sm "
             >
               Create First Workflow
             </button>
@@ -246,7 +246,7 @@ export default function WorkflowsPage() {
                         <button
                           onClick={handleSaveEdit}
                           disabled={saving || !editName.trim()}
-                          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+                          className="btn-primary px-3 py-1 rounded text-sm  disabled:opacity-50"
                         >
                           {saving ? 'Saving...' : 'Save'}
                         </button>
@@ -286,7 +286,7 @@ export default function WorkflowsPage() {
                         {!isSelected && (
                           <button
                             onClick={() => selectWorkflow(workflow.id)}
-                            className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                            className="btn-primary px-3 py-1 rounded text-sm "
                           >
                             Select
                           </button>

@@ -3,6 +3,34 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Voyage Advisory Brand Colors */
+  --voyage-charcoal: #333333;
+  --voyage-dark-blue: #336699;
+  --voyage-medium-blue: #6699cc;
+  --voyage-teal: #669999;
+  --voyage-gray: #999999;
+}
+
+/* Brand button styles */
+.btn-primary {
+  background-color: var(--voyage-dark-blue);
+  color: white;
+  transition: background-color 0.2s;
+}
+.btn-primary:hover {
+  background-color: #2a5580;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+}
+
+/* Brand link styles */
+.link-primary {
+  color: var(--voyage-dark-blue);
+}
+.link-primary:hover {
+  color: var(--voyage-medium-blue);
 }
 
 @theme inline {

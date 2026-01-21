@@ -220,7 +220,7 @@ export default function ActivitiesPage() {
       <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : ''}`}>
         {label}
         {sortColumn === column && (
-          <span className="text-blue-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+          <span className="link-primary">{sortDirection === 'asc' ? '↑' : '↓'}</span>
         )}
       </div>
     </th>
@@ -247,7 +247,7 @@ export default function ActivitiesPage() {
                 </option>
               ))}
             </select>
-            <Link href="/workflows" className="text-sm text-blue-600 hover:text-blue-700">
+            <Link href="/workflows" className="text-sm link-primary">
               Manage Workflows
             </Link>
           </div>
@@ -256,7 +256,7 @@ export default function ActivitiesPage() {
         {selectedWorkflowId && (
           <Link
             href={`/activities/new?workflowId=${selectedWorkflowId}`}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+            className="btn-primary px-4 py-2 rounded-md text-sm  transition-colors"
           >
             + New Activity
           </Link>
@@ -285,7 +285,7 @@ export default function ActivitiesPage() {
                 <p className="mt-2">Create a workflow to get started.</p>
                 <Link
                   href="/workflows"
-                  className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700"
+                  className="mt-4 inline-block btn-primary px-4 py-2 rounded-md text-sm "
                 >
                   Create First Workflow
                 </Link>
@@ -304,7 +304,7 @@ export default function ActivitiesPage() {
             <p className="text-lg">No activities in this workflow yet.</p>
             <Link
               href={`/activities/new?workflowId=${selectedWorkflowId}`}
-              className="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700"
+              className="inline-block mt-4 btn-primary px-4 py-2 rounded-md text-sm "
             >
               Create First Activity
             </Link>
@@ -372,7 +372,7 @@ export default function ActivitiesPage() {
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
                           <Link
                             href={`/activities/${activity.id}`}
-                            className="text-blue-600 hover:text-blue-700 mr-3"
+                            className="link-primary mr-3"
                           >
                             Edit
                           </Link>

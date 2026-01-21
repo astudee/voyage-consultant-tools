@@ -108,7 +108,7 @@ export default function Home() {
               <p className="mt-2">Create a workflow to get started.</p>
               <Link
                 href="/workflows"
-                className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700"
+                className="mt-4 inline-block btn-primary px-4 py-2 rounded-md text-sm "
               >
                 Create First Workflow
               </Link>
@@ -148,7 +148,7 @@ export default function Home() {
           {unassignedActivities.length > 0 && (
             <span className="text-yellow-600">{unassignedActivities.length} unassigned</span>
           )}
-          {loading && <span className="text-blue-600">Loading...</span>}
+          {loading && <span className="link-primary">Loading...</span>}
         </div>
       </header>
 
@@ -185,7 +185,7 @@ export default function Home() {
                   </div>
                   <Link
                     href={`/activities/${activity.id}`}
-                    className="text-xs text-blue-600 hover:text-blue-700 mt-1 inline-block"
+                    className="text-xs link-primary mt-1 inline-block"
                   >
                     Edit
                   </Link>

@@ -441,7 +441,7 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
               <button
                 type="button"
                 onClick={addBranch}
-                className="text-sm text-blue-600 hover:text-blue-700"
+                className="text-sm link-primary"
               >
                 + Add Branch
               </button>
@@ -852,7 +852,7 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
         <button
           type="submit"
           disabled={loading}
-          className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="btn-primary px-6 py-2 rounded-md"
         >
           {loading ? 'Saving...' : isEditing ? 'Update Activity' : 'Create Activity'}
         </button>

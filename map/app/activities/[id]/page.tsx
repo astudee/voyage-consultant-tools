@@ -84,7 +84,7 @@ export default function EditActivityPage({
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <p className="text-red-600 mb-4">{error || 'Activity not found'}</p>
-            <Link href="/activities" className="text-blue-600 hover:text-blue-700">
+            <Link href="/activities" className="link-primary">
               Go back to Activities
             </Link>
           </div>

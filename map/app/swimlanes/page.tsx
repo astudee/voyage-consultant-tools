@@ -206,7 +206,7 @@ export default function SwimlanesPage() {
           <button
             onClick={handleSaveAll}
             disabled={saving === 'all'}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+            className="btn-primary px-4 py-2 rounded-md text-sm  disabled:opacity-50"
           >
             {saving === 'all' ? 'Saving All...' : 'Save All Changes'}
           </button>
@@ -265,7 +265,7 @@ export default function SwimlanesPage() {
                       disabled={saving === letter || !hasChanges(letter)}
                       className={`px-3 py-1.5 rounded text-sm ${
                         hasChanges(letter)
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          ? 'btn-primary '
                           : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       } disabled:opacity-50`}
                     >

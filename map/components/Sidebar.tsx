@@ -33,7 +33,7 @@ export default function Sidebar() {
     <aside className="w-56 text-white flex flex-col" style={{ backgroundColor: brandColors.darkCharcoal }}>
       <div className="p-4 border-b" style={{ borderColor: brandColors.darkBlue }}>
         <Image
-          src="/voyage-logo.png"
+          src="/voyage-logo-white.png"
           alt="Voyage Advisory"
           width={180}
           height={60}
