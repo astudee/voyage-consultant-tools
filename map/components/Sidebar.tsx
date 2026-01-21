@@ -30,8 +30,8 @@ export default function Sidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <aside className="w-56 text-white flex flex-col" style={{ backgroundColor: brandColors.darkCharcoal }}>
-      <div className="p-4 border-b" style={{ borderColor: brandColors.darkBlue }}>
+    <aside className="w-56 text-white flex flex-col" style={{ backgroundColor: brandColors.darkBlue }}>
+      <div className="p-4 border-b" style={{ borderColor: brandColors.mediumBlue + '66' }}>
         <Image
           src="/voyage-logo-white.png"
           alt="Voyage Advisory"
@@ -40,12 +40,12 @@ export default function Sidebar() {
           className="mb-2"
           priority
         />
-        <p className="text-xs" style={{ color: brandColors.gray }}>Process Mapping Tools</p>
+        <p className="text-xs" style={{ color: brandColors.gray }}>Process Transformation Tools</p>
       </div>
 
       {/* Current Workflow Indicator */}
       {selectedWorkflow && (
-        <div className="px-4 py-2 border-b" style={{ backgroundColor: brandColors.darkBlue + '33', borderColor: brandColors.darkBlue }}>
+        <div className="px-4 py-2 border-b" style={{ backgroundColor: brandColors.darkCharcoal + '44', borderColor: brandColors.mediumBlue + '66' }}>
           <p className="text-xs" style={{ color: brandColors.gray }}>Current Workflow</p>
           <p className="text-sm font-medium text-white truncate">{selectedWorkflow.workflow_name}</p>
         </div>
@@ -62,19 +62,19 @@ export default function Sidebar() {
               href={item.href}
               className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
               style={{
-                backgroundColor: isActive ? brandColors.darkBlue : 'transparent',
-                color: isActive ? 'white' : brandColors.gray,
+                backgroundColor: isActive ? brandColors.darkCharcoal : 'transparent',
+                color: isActive ? 'white' : brandColors.mediumBlue,
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = brandColors.darkBlue + '66';
+                  e.currentTarget.style.backgroundColor = brandColors.darkCharcoal + '66';
                   e.currentTarget.style.color = 'white';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {
                   e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = brandColors.gray;
+                  e.currentTarget.style.color = brandColors.mediumBlue;
                 }
               }}
             >
@@ -98,7 +98,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Settings Section */}
-      <div className="border-t" style={{ borderColor: brandColors.darkBlue }}>
+      <div className="border-t" style={{ borderColor: brandColors.mediumBlue + '66' }}>
         <button
           onClick={() => setSettingsOpen(!settingsOpen)}
           className="w-full flex items-center justify-between px-4 py-3 text-sm transition-colors hover:opacity-80"
@@ -148,7 +148,7 @@ export default function Sidebar() {
                   min="0"
                   max="100"
                   className="w-16 rounded px-2 py-1 text-sm text-white focus:outline-none"
-                  style={{ backgroundColor: brandColors.darkBlue + '66', borderColor: brandColors.darkBlue, border: '1px solid' }}
+                  style={{ backgroundColor: brandColors.darkCharcoal + '66', borderColor: brandColors.mediumBlue + '66', border: '1px solid' }}
                 />
                 <span className="text-xs" style={{ color: brandColors.gray }}>%</span>
               </div>
@@ -167,7 +167,7 @@ export default function Sidebar() {
                 }}
                 min="0"
                 className="w-full rounded px-2 py-1 text-sm text-white focus:outline-none"
-                style={{ backgroundColor: brandColors.darkBlue + '66', borderColor: brandColors.darkBlue, border: '1px solid' }}
+                style={{ backgroundColor: brandColors.darkCharcoal + '66', borderColor: brandColors.mediumBlue + '66', border: '1px solid' }}
               />
             </div>
 
@@ -184,11 +184,11 @@ export default function Sidebar() {
                 }}
                 min="0"
                 className="w-full rounded px-2 py-1 text-sm text-white focus:outline-none"
-                style={{ backgroundColor: brandColors.darkBlue + '66', borderColor: brandColors.darkBlue, border: '1px solid' }}
+                style={{ backgroundColor: brandColors.darkCharcoal + '66', borderColor: brandColors.mediumBlue + '66', border: '1px solid' }}
               />
             </div>
 
-            <div className="pt-2 border-t" style={{ borderColor: brandColors.darkBlue }}>
+            <div className="pt-2 border-t" style={{ borderColor: brandColors.mediumBlue + '66' }}>
               <p className="text-xs" style={{ color: brandColors.teal }}>
                 Effective: {workHoursPerMonth.toFixed(0)} hrs/month
               </p>
@@ -197,7 +197,7 @@ export default function Sidebar() {
         )}
       </div>
 
-      <div className="p-4 border-t text-xs" style={{ borderColor: brandColors.darkBlue, color: brandColors.gray }}>
+      <div className="p-4 border-t text-xs" style={{ borderColor: brandColors.mediumBlue + '66', color: brandColors.gray }}>
         <p>v1.0.0</p>
       </div>
     </aside>
