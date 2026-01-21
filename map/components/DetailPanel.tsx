@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { Activity } from '@/lib/types';
+import { useSettings } from '@/lib/SettingsContext';
 
 interface DetailPanelProps {
   activity: Activity | null;
@@ -8,7 +10,47 @@ interface DetailPanelProps {
 }
 
 export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
+  const { settings } = useSettings();
+
   if (!activity) return null;
+
+  // Calculate costs
+  const calculateCosts = () => {
+    let taskTime: number | null = null;
+    if (activity.task_time_size === 'Other' && activity.task_time_custom) {
+      taskTime = activity.task_time_custom;
+    } else if (activity.task_time_midpoint) {
+      taskTime = activity.task_time_midpoint;
+    }
+
+    let laborRate: number | null = null;
+    if (activity.labor_rate_size === 'Other' && activity.labor_rate_custom) {
+      laborRate = activity.labor_rate_custom;
+    } else if (activity.labor_rate_midpoint) {
+      laborRate = activity.labor_rate_midpoint;
+    }
+
+    let volume: number | null = null;
+    if (activity.volume_size === 'Other' && activity.volume_custom) {
+      volume = activity.volume_custom;
+    } else if (activity.volume_midpoint) {
+      volume = activity.volume_midpoint;
+    }
+
+    if (taskTime && laborRate && volume && taskTime > 0) {
+      const effectiveTaskTime = taskTime / settings.productivity_factor;
+      const tasksPerHour = 60 / effectiveTaskTime;
+      const costPerTask = laborRate / tasksPerHour;
+      const monthlyCost = costPerTask * volume;
+      const annualCost = monthlyCost * 12;
+
+      return { monthly_cost: monthlyCost, annual_cost: annualCost };
+    }
+
+    return null;
+  };
+
+  const costs = calculateCosts();
 
   const formatCurrency = (value: number | null) => {
     if (value === null || value === undefined) return '-';
@@ -46,17 +88,31 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
     }
   }
 
+  // Check if time & cost section has any data
+  const hasTimeCostData = activity.task_time_midpoint || activity.labor_rate_midpoint || activity.volume_midpoint || costs;
+
+  // Check if transformation section has any data
+  const hasTransformationData = activity.transformation_plan || activity.phase || (activity.status && activity.status !== 'not_started');
+
   return (
     <div className="fixed right-0 top-0 h-full w-96 bg-white shadow-xl border-l border-gray-200 overflow-y-auto z-50">
       {/* Header */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800">Activity Details</h2>
-        <button
-          onClick={onClose}
-          className="text-gray-500 hover:text-gray-700 text-xl leading-none"
-        >
-          &times;
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/activities/${activity.id}`}
+            className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
+          >
+            Edit
+          </Link>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 text-xl leading-none"
+          >
+            &times;
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -111,48 +167,118 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
         )}
 
         {/* Time & Cost */}
-        <section>
-          <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
-            Time & Cost
-          </h3>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <span className="text-xs text-gray-500">Task Time</span>
-              <p className="text-gray-800">
-                {activity.task_time_midpoint ? `${activity.task_time_midpoint} min` : '-'}
-              </p>
+        {hasTimeCostData && (
+          <section>
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+              Time & Cost
+            </h3>
+            <div className="space-y-3">
+              {/* Input metrics row */}
+              <div className="grid grid-cols-3 gap-3">
+                {activity.task_time_midpoint && (
+                  <div>
+                    <span className="text-xs text-gray-500">Task Time</span>
+                    <p className="text-gray-800">{activity.task_time_midpoint} min</p>
+                  </div>
+                )}
+                {activity.labor_rate_midpoint && (
+                  <div>
+                    <span className="text-xs text-gray-500">Labor Rate</span>
+                    <p className="text-gray-800">{formatCurrency(activity.labor_rate_midpoint)}/hr</p>
+                  </div>
+                )}
+                {activity.volume_midpoint && (
+                  <div>
+                    <span className="text-xs text-gray-500">Volume</span>
+                    <p className="text-gray-800">{formatNumber(activity.volume_midpoint)}/mo</p>
+                  </div>
+                )}
+              </div>
+              {/* Calculated costs row */}
+              {costs && (
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                  <div>
+                    <span className="text-xs text-gray-500">Monthly Cost</span>
+                    <p className="text-gray-800 font-medium">{formatCurrency(costs.monthly_cost)}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500">Annual Cost</span>
+                    <p className="text-gray-800 font-medium">{formatCurrency(costs.annual_cost)}</p>
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <span className="text-xs text-gray-500">Labor Rate</span>
-              <p className="text-gray-800">{formatCurrency(activity.labor_rate_midpoint)}/hr</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Volume</span>
-              <p className="text-gray-800">{formatNumber(activity.volume_midpoint)}/mo</p>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
+
+        {/* Process Steps */}
+        {activity.process_steps && (
+          <section>
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+              Process Steps
+            </h3>
+            <p className="text-gray-700 text-sm whitespace-pre-wrap">{activity.process_steps}</p>
+          </section>
+        )}
 
         {/* Transformation */}
-        <section>
-          <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
-            Transformation
-          </h3>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <span className="text-xs text-gray-500">Plan</span>
-              <p className="text-gray-800">{getPlanLabel(activity.transformation_plan)}</p>
+        {hasTransformationData && (
+          <section>
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+              Transformation
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              {activity.transformation_plan && (
+                <div>
+                  <span className="text-xs text-gray-500">Plan</span>
+                  <p className="text-gray-800">{getPlanLabel(activity.transformation_plan)}</p>
+                </div>
+              )}
+              {activity.phase && (
+                <div>
+                  <span className="text-xs text-gray-500">Phase</span>
+                  <p className="text-gray-800">{activity.phase}</p>
+                </div>
+              )}
+              {activity.status && activity.status !== 'not_started' && (
+                <div>
+                  <span className="text-xs text-gray-500">Status</span>
+                  <p className="text-gray-800">{getStatusLabel(activity.status)}</p>
+                </div>
+              )}
             </div>
-            <div>
-              <span className="text-xs text-gray-500">Phase</span>
-              <p className="text-gray-800">{activity.phase ?? '-'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Status</span>
-              <p className="text-gray-800">{getStatusLabel(activity.status)}</p>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
+
+        {/* Systems */}
+        {activity.systems_touched && (
+          <section>
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+              Systems
+            </h3>
+            <p className="text-gray-700 text-sm whitespace-pre-wrap">{activity.systems_touched}</p>
+          </section>
+        )}
+
+        {/* Constraints & Rules */}
+        {activity.constraints_rules && (
+          <section>
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+              Constraints & Rules
+            </h3>
+            <p className="text-gray-700 text-sm whitespace-pre-wrap">{activity.constraints_rules}</p>
+          </section>
+        )}
+
+        {/* Opportunities */}
+        {activity.opportunities && (
+          <section>
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+              Opportunities
+            </h3>
+            <p className="text-gray-700 text-sm whitespace-pre-wrap">{activity.opportunities}</p>
+          </section>
+        )}
 
         {/* Comments */}
         {activity.comments && (

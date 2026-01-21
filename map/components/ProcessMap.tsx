@@ -106,10 +106,26 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
       connections.forEach((conn, idx) => {
         if (!conn.next) return;
 
-        // Find target activity by grid location
-        const targetActivity = activities.find(
+        // First try to find target activity by exact grid location
+        let targetActivity = activities.find(
           (a) => a.grid_location?.toUpperCase() === conn.next?.toUpperCase()
         );
+
+        // If no exact match found, try to find the first activity in the target swimlane
+        if (!targetActivity) {
+          const targetLetter = conn.next?.match(/^[A-Z]/i)?.[0]?.toUpperCase();
+          if (targetLetter) {
+            // Find all activities in that swimlane and get the one with the lowest step number
+            const swimlaneActivities = activities
+              .filter((a) => a.grid_location?.toUpperCase().startsWith(targetLetter))
+              .sort((a, b) => {
+                const aStep = parseInt(a.grid_location?.match(/\d+/)?.[0] || '999', 10);
+                const bStep = parseInt(b.grid_location?.match(/\d+/)?.[0] || '999', 10);
+                return aStep - bStep;
+              });
+            targetActivity = swimlaneActivities[0];
+          }
+        }
 
         if (!targetActivity) return;
 
@@ -227,24 +243,42 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
     setDropIndicator(null);
   }, []);
 
-  // Find the max row used for swimlane background
-  const maxRow = useMemo(() => {
-    let max = 0;
+  // Find all rows to display (union of activities and configured swimlanes)
+  const rowsToDisplay = useMemo(() => {
+    const rows = new Set<number>();
+
+    // Add rows from activities
     activities.forEach((a) => {
       const pos = parseGridLocation(a.grid_location);
-      if (pos && pos.row > max) max = pos.row;
+      if (pos) rows.add(pos.row);
     });
-    return max;
-  }, [activities]);
+
+    // Add rows from configured swimlanes
+    swimlanes.forEach((s) => {
+      const row = s.swimlane_letter.charCodeAt(0) - 'A'.charCodeAt(0);
+      if (row >= 0 && row <= 25) rows.add(row);
+    });
+
+    // Convert to sorted array
+    return Array.from(rows).sort((a, b) => a - b);
+  }, [activities, swimlanes]);
+
+  // Find the max row for canvas sizing
+  const maxRow = useMemo(() => {
+    return rowsToDisplay.length > 0 ? Math.max(...rowsToDisplay) : 0;
+  }, [rowsToDisplay]);
 
   // Generate swimlane background elements
   const swimlaneBackgrounds = useMemo(() => {
     const elements: React.ReactNode[] = [];
 
+    // Draw swimlanes for all rows from 0 to maxRow to ensure continuity
     for (let row = 0; row <= maxRow; row++) {
       const letter = String.fromCharCode('A'.charCodeAt(0) + row);
       const name = swimlaneNames[letter] || '';
-      const y = PADDING_TOP + row * ROW_HEIGHT - ROW_HEIGHT / 2 + 40;
+      // Position label at center of swimlane row
+      const swimlaneCenterY = PADDING_TOP + row * ROW_HEIGHT;
+      const labelY = swimlaneCenterY - 10; // Offset to roughly center the label
 
       // Swimlane label
       elements.push(
@@ -253,7 +287,7 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
           className="absolute text-sm font-medium text-gray-600 bg-gray-50 px-2 py-1 rounded"
           style={{
             left: 10,
-            top: y,
+            top: labelY,
             width: SWIMLANE_LABEL_WIDTH - 20,
           }}
         >
@@ -262,12 +296,12 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
         </div>
       );
 
-      // Swimlane divider line
+      // Swimlane divider line (between rows)
       if (row > 0) {
         elements.push(
           <div
             key={`line-${letter}`}
-            className="absolute border-t border-dashed border-gray-200"
+            className="absolute border-t border-dashed border-gray-300"
             style={{
               left: 0,
               right: 0,
@@ -276,6 +310,21 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
           />
         );
       }
+    }
+
+    // Add bottom divider for the last swimlane
+    if (maxRow >= 0) {
+      elements.push(
+        <div
+          key="line-bottom"
+          className="absolute border-t border-dashed border-gray-300"
+          style={{
+            left: 0,
+            right: 0,
+            top: PADDING_TOP + (maxRow + 1) * ROW_HEIGHT - ROW_HEIGHT / 2,
+          }}
+        />
+      );
     }
 
     return elements;

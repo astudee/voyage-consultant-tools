@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Activity } from '@/lib/types';
 import { useSettings } from '@/lib/SettingsContext';
 import { useWorkflow } from '@/lib/WorkflowContext';
+
+type SortColumn = 'id' | 'name' | 'type' | 'swimlane' | 'step' | 'status' | 'monthly_cost' | 'annual_cost';
+type SortDirection = 'asc' | 'desc';
 
 export default function ActivitiesPage() {
   const { settings, workHoursPerMonth } = useSettings();
@@ -12,6 +15,8 @@ export default function ActivitiesPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('id');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // Calculate costs using dynamic settings
   const calculateCosts = (activity: Activity) => {
@@ -130,6 +135,92 @@ export default function ActivitiesPage() {
     }).format(value);
   };
 
+  // Handle column header click for sorting
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort activities
+  const sortedActivities = useMemo(() => {
+    const sorted = [...activities].sort((a, b) => {
+      let aVal: string | number | null = null;
+      let bVal: string | number | null = null;
+
+      switch (sortColumn) {
+        case 'id':
+          aVal = a.id;
+          bVal = b.id;
+          break;
+        case 'name':
+          aVal = a.activity_name?.toLowerCase() || '';
+          bVal = b.activity_name?.toLowerCase() || '';
+          break;
+        case 'type':
+          aVal = a.activity_type;
+          bVal = b.activity_type;
+          break;
+        case 'swimlane':
+          aVal = a.grid_location?.match(/^[A-Z]/)?.[0] || 'ZZZ';
+          bVal = b.grid_location?.match(/^[A-Z]/)?.[0] || 'ZZZ';
+          break;
+        case 'step':
+          aVal = parseInt(a.grid_location?.match(/\d+/)?.[0] || '9999', 10);
+          bVal = parseInt(b.grid_location?.match(/\d+/)?.[0] || '9999', 10);
+          break;
+        case 'status':
+          aVal = a.status || '';
+          bVal = b.status || '';
+          break;
+        case 'monthly_cost':
+          const aCosts = calculateCosts(a);
+          const bCosts = calculateCosts(b);
+          aVal = aCosts?.monthly_cost ?? -1;
+          bVal = bCosts?.monthly_cost ?? -1;
+          break;
+        case 'annual_cost':
+          const aAnnual = calculateCosts(a);
+          const bAnnual = calculateCosts(b);
+          aVal = aAnnual?.annual_cost ?? -1;
+          bVal = bAnnual?.annual_cost ?? -1;
+          break;
+      }
+
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      const comparison = String(aVal).localeCompare(String(bVal));
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [activities, sortColumn, sortDirection, settings.productivity_factor]);
+
+  // Sortable column header component
+  const SortableHeader = ({ column, label, align = 'left' }: { column: SortColumn; label: string; align?: 'left' | 'right' | 'center' }) => (
+    <th
+      onClick={() => handleSort(column)}
+      className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none ${
+        align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
+      }`}
+    >
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : ''}`}>
+        {label}
+        {sortColumn === column && (
+          <span className="text-blue-600">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+        )}
+      </div>
+    </th>
+  );
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
@@ -220,37 +311,21 @@ export default function ActivitiesPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Swimlane
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Step
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Monthly Cost
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Annual Cost
-                    </th>
+                    <SortableHeader column="id" label="ID" />
+                    <SortableHeader column="name" label="Name" />
+                    <SortableHeader column="type" label="Type" />
+                    <SortableHeader column="swimlane" label="Swimlane" />
+                    <SortableHeader column="step" label="Step" />
+                    <SortableHeader column="status" label="Status" />
+                    <SortableHeader column="monthly_cost" label="Monthly Cost" align="right" />
+                    <SortableHeader column="annual_cost" label="Annual Cost" align="right" />
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {activities.map((activity) => {
+                  {sortedActivities.map((activity) => {
                     const costs = calculateCosts(activity);
                     const stepNumber = activity.grid_location?.match(/\d+/)?.[0];
                     const isUnassigned = !stepNumber;
