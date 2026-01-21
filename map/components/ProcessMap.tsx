@@ -16,7 +16,7 @@ import '@xyflow/react/dist/style.css';
 import ActivityNode from './ActivityNode';
 import DecisionNode from './DecisionNode';
 import DetailPanel from './DetailPanel';
-import { Activity, SwimlaneConfig } from '@/lib/snowflake';
+import { Activity, SwimlaneConfig } from '@/lib/types';
 
 interface ProcessMapProps {
   activities: Activity[];

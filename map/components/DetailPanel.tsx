@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity } from '@/lib/snowflake';
+import { Activity } from '@/lib/types';
 
 interface DetailPanelProps {
   activity: Activity | null;

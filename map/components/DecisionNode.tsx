@@ -1,7 +1,7 @@
 'use client';
 
 import { Handle, Position } from '@xyflow/react';
-import { Activity } from '@/lib/snowflake';
+import { Activity } from '@/lib/types';
 
 interface DecisionNodeProps {
   data: {

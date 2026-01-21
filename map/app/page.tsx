@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import ProcessMap from '@/components/ProcessMap';
-import { Activity, SwimlaneConfig, Workflow } from '@/lib/snowflake';
+import { Activity, SwimlaneConfig, Workflow } from '@/lib/types';
 
 export default function Home() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
