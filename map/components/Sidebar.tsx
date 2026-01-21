@@ -67,7 +67,7 @@ export default function Sidebar() {
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = brandColors.gray;
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
                 }
               }}
               onMouseLeave={(e) => {
