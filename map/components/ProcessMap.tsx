@@ -27,8 +27,8 @@ interface ProcessMapProps {
 }
 
 // Grid spacing constants
-const COLUMN_WIDTH = 200;
-const ROW_HEIGHT = 150;
+const COLUMN_WIDTH = 250;
+const ROW_HEIGHT = 180;
 const SWIMLANE_LABEL_WIDTH = 150;
 const PADDING_TOP = 50;
 

@@ -6,7 +6,7 @@ import { Activity } from '@/lib/types';
 import { useSettings } from '@/lib/SettingsContext';
 import { useWorkflow } from '@/lib/WorkflowContext';
 
-type SortColumn = 'id' | 'name' | 'type' | 'swimlane' | 'step' | 'status' | 'monthly_cost' | 'annual_cost';
+type SortColumn = 'id' | 'name' | 'type' | 'swimlane' | 'phase' | 'status' | 'plan' | 'monthly_cost' | 'annual_cost';
 type SortDirection = 'asc' | 'desc';
 
 export default function ActivitiesPage() {
@@ -168,13 +168,17 @@ export default function ActivitiesPage() {
           aVal = a.grid_location?.match(/^[A-Z]/)?.[0] || 'ZZZ';
           bVal = b.grid_location?.match(/^[A-Z]/)?.[0] || 'ZZZ';
           break;
-        case 'step':
+        case 'phase':
           aVal = parseInt(a.grid_location?.match(/\d+/)?.[0] || '9999', 10);
           bVal = parseInt(b.grid_location?.match(/\d+/)?.[0] || '9999', 10);
           break;
         case 'status':
           aVal = a.status || '';
           bVal = b.status || '';
+          break;
+        case 'plan':
+          aVal = a.transformation_plan || 'zzz';
+          bVal = b.transformation_plan || 'zzz';
           break;
         case 'monthly_cost':
           const aCosts = calculateCosts(a);
@@ -315,7 +319,8 @@ export default function ActivitiesPage() {
                     <SortableHeader column="name" label="Name" />
                     <SortableHeader column="type" label="Type" />
                     <SortableHeader column="swimlane" label="Swimlane" />
-                    <SortableHeader column="step" label="Step" />
+                    <SortableHeader column="phase" label="Phase" />
+                    <SortableHeader column="plan" label="Plan" />
                     <SortableHeader column="status" label="Status" />
                     <SortableHeader column="monthly_cost" label="Monthly Cost" align="right" />
                     <SortableHeader column="annual_cost" label="Annual Cost" align="right" />
@@ -352,6 +357,9 @@ export default function ActivitiesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <PlanBadge plan={activity.transformation_plan} />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
                           <StatusBadge status={activity.status} />
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
@@ -380,7 +388,7 @@ export default function ActivitiesPage() {
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={6} className="px-4 py-3 text-sm font-bold text-gray-900">
+                    <td colSpan={7} className="px-4 py-3 text-sm font-bold text-gray-900">
                       TOTAL
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
@@ -422,6 +430,26 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${style}`}>
       {status?.replace('_', ' ') || 'not started'}
+    </span>
+  );
+}
+
+function PlanBadge({ plan }: { plan: string | null }) {
+  if (!plan) return <span className="text-gray-400">-</span>;
+
+  const planStyles: Record<string, string> = {
+    eliminate: 'bg-red-100 text-red-700',
+    automate: 'bg-purple-100 text-purple-700',
+    optimize: 'bg-blue-100 text-blue-700',
+    outsource: 'bg-orange-100 text-orange-700',
+    defer: 'bg-gray-100 text-gray-700',
+  };
+
+  const style = planStyles[plan] || 'bg-gray-100 text-gray-700';
+
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium capitalize ${style}`}>
+      {plan}
     </span>
   );
 }
