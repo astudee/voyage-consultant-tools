@@ -15,6 +15,8 @@ import '@xyflow/react/dist/style.css';
 
 import ActivityNode from './ActivityNode';
 import DecisionNode from './DecisionNode';
+import SwimlaneLabel from './SwimlaneLabel';
+import SwimlaneDivider from './SwimlaneDivider';
 import DetailPanel from './DetailPanel';
 import { Activity, SwimlaneConfig } from '@/lib/types';
 
@@ -51,6 +53,8 @@ function parseGridLocation(location: string): { row: number; col: number } | nul
 const nodeTypes = {
   activity: ActivityNode,
   decision: DecisionNode,
+  swimlaneLabel: SwimlaneLabel,
+  swimlaneDivider: SwimlaneDivider,
 };
 
 export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: ProcessMapProps) {
@@ -66,18 +70,92 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
     return map;
   }, [swimlanes]);
 
-  // Convert activities to nodes
+  // Find max column for divider width calculation
+  const maxCol = useMemo(() => {
+    let max = 10; // Minimum width
+    activities.forEach((a) => {
+      const pos = parseGridLocation(a.grid_location);
+      if (pos && pos.col > max) max = pos.col;
+    });
+    return max + 5; // Add some padding
+  }, [activities]);
+
+  // Find all rows to display (union of activities and configured swimlanes)
+  const rowsToDisplay = useMemo(() => {
+    const rows = new Set<number>();
+    activities.forEach((a) => {
+      const pos = parseGridLocation(a.grid_location);
+      if (pos) rows.add(pos.row);
+    });
+    swimlanes.forEach((s) => {
+      const row = s.swimlane_letter.charCodeAt(0) - 'A'.charCodeAt(0);
+      if (row >= 0 && row <= 25) rows.add(row);
+    });
+    return Array.from(rows).sort((a, b) => a - b);
+  }, [activities, swimlanes]);
+
+  const maxRow = useMemo(() => {
+    return rowsToDisplay.length > 0 ? Math.max(...rowsToDisplay) : 0;
+  }, [rowsToDisplay]);
+
+  // Convert activities to nodes, including swimlane labels and dividers
   const initialNodes: Node[] = useMemo(() => {
-    return activities.map((activity) => {
-      const pos = parseGridLocation(activity.grid_location);
-      if (!pos) {
-        return null;
+    const nodes: Node[] = [];
+
+    // Add swimlane labels and dividers (rendered first, so they appear behind activities)
+    for (let row = 0; row <= maxRow; row++) {
+      const letter = String.fromCharCode('A'.charCodeAt(0) + row);
+      const name = swimlaneNames[letter] || '';
+      const y = PADDING_TOP + row * ROW_HEIGHT;
+
+      // Swimlane label
+      nodes.push({
+        id: `swimlane-label-${letter}`,
+        type: 'swimlaneLabel',
+        position: { x: 10, y: y - 12 },
+        data: { letter, name },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+      });
+
+      // Swimlane divider (between rows, starting from row 1)
+      if (row > 0) {
+        nodes.push({
+          id: `swimlane-divider-${letter}`,
+          type: 'swimlaneDivider',
+          position: { x: 0, y: PADDING_TOP + row * ROW_HEIGHT - ROW_HEIGHT / 2 },
+          data: { width: maxCol * COLUMN_WIDTH + SWIMLANE_LABEL_WIDTH + 200 },
+          draggable: false,
+          selectable: false,
+          connectable: false,
+        });
       }
+    }
+
+    // Add bottom divider
+    if (maxRow >= 0) {
+      const bottomLetter = String.fromCharCode('A'.charCodeAt(0) + maxRow + 1);
+      nodes.push({
+        id: `swimlane-divider-${bottomLetter}`,
+        type: 'swimlaneDivider',
+        position: { x: 0, y: PADDING_TOP + (maxRow + 1) * ROW_HEIGHT - ROW_HEIGHT / 2 },
+        data: { width: maxCol * COLUMN_WIDTH + SWIMLANE_LABEL_WIDTH + 200 },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+      });
+    }
+
+    // Add activity nodes
+    activities.forEach((activity) => {
+      const pos = parseGridLocation(activity.grid_location);
+      if (!pos) return;
 
       const x = SWIMLANE_LABEL_WIDTH + pos.col * COLUMN_WIDTH;
       const y = PADDING_TOP + pos.row * ROW_HEIGHT;
 
-      return {
+      nodes.push({
         id: `activity-${activity.id}`,
         type: activity.activity_type === 'decision' ? 'decision' : 'activity',
         position: { x, y },
@@ -85,9 +163,11 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
           activity,
           onClick: setSelectedActivity,
         },
-      };
-    }).filter(Boolean) as Node[];
-  }, [activities]);
+      });
+    });
+
+    return nodes;
+  }, [activities, maxRow, maxCol, swimlaneNames]);
 
   // Convert connections to edges
   const initialEdges: Edge[] = useMemo(() => {
@@ -243,93 +323,6 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
     setDropIndicator(null);
   }, []);
 
-  // Find all rows to display (union of activities and configured swimlanes)
-  const rowsToDisplay = useMemo(() => {
-    const rows = new Set<number>();
-
-    // Add rows from activities
-    activities.forEach((a) => {
-      const pos = parseGridLocation(a.grid_location);
-      if (pos) rows.add(pos.row);
-    });
-
-    // Add rows from configured swimlanes
-    swimlanes.forEach((s) => {
-      const row = s.swimlane_letter.charCodeAt(0) - 'A'.charCodeAt(0);
-      if (row >= 0 && row <= 25) rows.add(row);
-    });
-
-    // Convert to sorted array
-    return Array.from(rows).sort((a, b) => a - b);
-  }, [activities, swimlanes]);
-
-  // Find the max row for canvas sizing
-  const maxRow = useMemo(() => {
-    return rowsToDisplay.length > 0 ? Math.max(...rowsToDisplay) : 0;
-  }, [rowsToDisplay]);
-
-  // Generate swimlane background elements
-  const swimlaneBackgrounds = useMemo(() => {
-    const elements: React.ReactNode[] = [];
-
-    // Draw swimlanes for all rows from 0 to maxRow to ensure continuity
-    for (let row = 0; row <= maxRow; row++) {
-      const letter = String.fromCharCode('A'.charCodeAt(0) + row);
-      const name = swimlaneNames[letter] || '';
-      // Position label at center of swimlane row
-      const swimlaneCenterY = PADDING_TOP + row * ROW_HEIGHT;
-      const labelY = swimlaneCenterY - 10; // Offset to roughly center the label
-
-      // Swimlane label
-      elements.push(
-        <div
-          key={`label-${letter}`}
-          className="absolute text-sm font-medium text-gray-600 bg-gray-50 px-2 py-1 rounded"
-          style={{
-            left: 10,
-            top: labelY,
-            width: SWIMLANE_LABEL_WIDTH - 20,
-          }}
-        >
-          <span className="font-bold">{letter}</span>
-          {name && <span className="text-gray-400 ml-1">- {name}</span>}
-        </div>
-      );
-
-      // Swimlane divider line (between rows)
-      if (row > 0) {
-        elements.push(
-          <div
-            key={`line-${letter}`}
-            className="absolute border-t border-dashed border-gray-300"
-            style={{
-              left: 0,
-              right: 0,
-              top: PADDING_TOP + row * ROW_HEIGHT - ROW_HEIGHT / 2,
-            }}
-          />
-        );
-      }
-    }
-
-    // Add bottom divider for the last swimlane
-    if (maxRow >= 0) {
-      elements.push(
-        <div
-          key="line-bottom"
-          className="absolute border-t border-dashed border-gray-300"
-          style={{
-            left: 0,
-            right: 0,
-            top: PADDING_TOP + (maxRow + 1) * ROW_HEIGHT - ROW_HEIGHT / 2,
-          }}
-        />
-      );
-    }
-
-    return elements;
-  }, [maxRow, swimlaneNames]);
-
   return (
     <div
       className="w-full h-full relative"
@@ -337,11 +330,6 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      {/* Swimlane labels overlay */}
-      <div className="absolute inset-0 pointer-events-none z-10">
-        {swimlaneBackgrounds}
-      </div>
-
       {/* Drop indicator */}
       {dropIndicator && (
         <div
