@@ -62,16 +62,13 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
     return value.toLocaleString('en-US');
   };
 
-  // Get t-shirt size abbreviation
-  const getSizeAbbrev = (size: string | null) => {
+  // Get t-shirt size for display (sizes are already stored as abbreviations)
+  const getSizeDisplay = (size: string | null) => {
     if (!size || size === 'Other') return null;
-    const abbrevs: Record<string, string> = {
-      'Small': 'S',
-      'Medium': 'M',
-      'Large': 'L',
-      'XL': 'XL',
-    };
-    return abbrevs[size] || null;
+    // Valid t-shirt sizes - return as-is since they're already abbreviations
+    const validSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'H', 'XH'];
+    if (validSizes.includes(size)) return size;
+    return null;
   };
 
   const getStatusLabel = (status: string) => {
@@ -192,8 +189,8 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
                     <span className="text-xs text-gray-500">Task Time</span>
                     <p className="text-gray-800">
                       {activity.task_time_midpoint} min
-                      {getSizeAbbrev(activity.task_time_size) && (
-                        <span className="text-gray-400 ml-1">({getSizeAbbrev(activity.task_time_size)})</span>
+                      {getSizeDisplay(activity.task_time_size) && (
+                        <span className="text-gray-400 ml-1">({getSizeDisplay(activity.task_time_size)})</span>
                       )}
                     </p>
                   </div>
@@ -203,8 +200,8 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
                     <span className="text-xs text-gray-500">Labor Rate</span>
                     <p className="text-gray-800">
                       {formatCurrency(activity.labor_rate_midpoint)}/hr
-                      {getSizeAbbrev(activity.labor_rate_size) && (
-                        <span className="text-gray-400 ml-1">({getSizeAbbrev(activity.labor_rate_size)})</span>
+                      {getSizeDisplay(activity.labor_rate_size) && (
+                        <span className="text-gray-400 ml-1">({getSizeDisplay(activity.labor_rate_size)})</span>
                       )}
                     </p>
                   </div>
@@ -214,8 +211,8 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
                     <span className="text-xs text-gray-500">Volume</span>
                     <p className="text-gray-800">
                       {formatNumber(activity.volume_midpoint)}/mo
-                      {getSizeAbbrev(activity.volume_size) && (
-                        <span className="text-gray-400 ml-1">({getSizeAbbrev(activity.volume_size)})</span>
+                      {getSizeDisplay(activity.volume_size) && (
+                        <span className="text-gray-400 ml-1">({getSizeDisplay(activity.volume_size)})</span>
                       )}
                     </p>
                   </div>
