@@ -1,49 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import ProcessMap from '@/components/ProcessMap';
-import { Activity, SwimlaneConfig, Workflow } from '@/lib/types';
+import { Activity } from '@/lib/types';
+import { useWorkflow } from '@/lib/WorkflowContext';
 
 export default function Home() {
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<number | null>(null);
+  const {
+    workflows,
+    selectedWorkflowId,
+    selectWorkflow,
+    swimlanes,
+    loading: workflowLoading
+  } = useWorkflow();
+
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [swimlanes, setSwimlanes] = useState<SwimlaneConfig[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch workflows on mount
-  useEffect(() => {
-    async function fetchWorkflows() {
-      try {
-        const res = await fetch('/api/activities');
-        const data = await res.json();
-
-        if (data.error) {
-          setError(data.error);
-          return;
-        }
-
-        setWorkflows(data.workflows || []);
-
-        // Auto-select first workflow
-        if (data.workflows?.length > 0) {
-          setSelectedWorkflowId(data.workflows[0].id);
-        }
-      } catch (err) {
-        setError('Failed to fetch workflows');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchWorkflows();
-  }, []);
 
   // Fetch activities when workflow changes
   useEffect(() => {
-    if (!selectedWorkflowId) return;
+    if (!selectedWorkflowId) {
+      setActivities([]);
+      return;
+    }
 
     async function fetchActivities() {
       setLoading(true);
@@ -57,7 +38,6 @@ export default function Home() {
         }
 
         setActivities(data.activities || []);
-        setSwimlanes(data.swimlanes || []);
         setError(null);
       } catch (err) {
         setError('Failed to fetch activities');
@@ -70,7 +50,44 @@ export default function Home() {
     fetchActivities();
   }, [selectedWorkflowId]);
 
-  if (loading && workflows.length === 0) {
+  // Separate assigned vs unassigned activities
+  const assignedActivities = activities.filter((a) => {
+    const hasStep = a.grid_location && /\d+/.test(a.grid_location);
+    return hasStep;
+  });
+
+  const unassignedActivities = activities.filter((a) => {
+    const hasStep = a.grid_location && /\d+/.test(a.grid_location);
+    return !hasStep;
+  });
+
+  // Handle position update from drag-drop
+  const handlePositionUpdate = async (activityId: number, newGridLocation: string) => {
+    try {
+      const res = await fetch(`/api/activities/${activityId}/position`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grid_location: newGridLocation }),
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        console.error('Failed to update position:', data.error);
+        return;
+      }
+
+      // Refresh activities
+      setActivities((prev) =>
+        prev.map((a) =>
+          a.id === activityId ? { ...a, grid_location: newGridLocation } : a
+        )
+      );
+    } catch (err) {
+      console.error('Failed to update position:', err);
+    }
+  };
+
+  if (workflowLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
@@ -81,12 +98,24 @@ export default function Home() {
     );
   }
 
-  if (error && workflows.length === 0) {
+  if (!selectedWorkflowId) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-center text-red-600">
-          <p className="text-xl font-semibold">Error</p>
-          <p className="mt-2">{error}</p>
+        <div className="text-center text-gray-500">
+          {workflows.length === 0 ? (
+            <>
+              <p className="text-lg">No workflows yet.</p>
+              <p className="mt-2">Create a workflow to get started.</p>
+              <Link
+                href="/workflows"
+                className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700"
+              >
+                Create First Workflow
+              </Link>
+            </>
+          ) : (
+            <p>Select a workflow to view the process map.</p>
+          )}
         </div>
       </div>
     );
@@ -102,9 +131,10 @@ export default function Home() {
           {/* Workflow selector */}
           <select
             value={selectedWorkflowId || ''}
-            onChange={(e) => setSelectedWorkflowId(Number(e.target.value))}
+            onChange={(e) => selectWorkflow(Number(e.target.value) || null)}
             className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
+            <option value="">-- Select Workflow --</option>
             {workflows.map((wf) => (
               <option key={wf.id} value={wf.id}>
                 {wf.workflow_name}
@@ -114,20 +144,79 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span>{activities.length} activities</span>
+          <span>{assignedActivities.length} on map</span>
+          {unassignedActivities.length > 0 && (
+            <span className="text-yellow-600">{unassignedActivities.length} unassigned</span>
+          )}
           {loading && <span className="text-blue-600">Loading...</span>}
         </div>
       </header>
 
-      {/* Map */}
-      <main className="flex-1 relative">
-        {activities.length > 0 ? (
-          <ProcessMap activities={activities} swimlanes={swimlanes} />
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            {loading ? 'Loading activities...' : 'No activities in this workflow'}
+      {/* Map + Unassigned Sidebar */}
+      <main className="flex-1 flex overflow-hidden">
+        {/* Unassigned Activities Sidebar */}
+        {unassignedActivities.length > 0 && (
+          <div className="w-64 bg-yellow-50 border-r border-yellow-200 flex flex-col">
+            <div className="px-3 py-2 bg-yellow-100 border-b border-yellow-200">
+              <h2 className="font-semibold text-yellow-800 text-sm">Unassigned Activities</h2>
+              <p className="text-xs text-yellow-600 mt-0.5">
+                Drag to the map or edit to assign a step position
+              </p>
+            </div>
+            <div className="flex-1 overflow-auto p-2 space-y-2">
+              {unassignedActivities.map((activity) => (
+                <div
+                  key={activity.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('activity-id', String(activity.id));
+                    e.dataTransfer.setData('activity-swimlane', activity.grid_location || '');
+                  }}
+                  className="bg-white border border-yellow-300 rounded-md p-2 text-sm cursor-grab hover:shadow-md transition-shadow"
+                >
+                  <div className="font-medium text-gray-800 truncate">
+                    {activity.activity_name}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                    <span className="capitalize">{activity.activity_type}</span>
+                    <span className="text-yellow-600">
+                      Swimlane {activity.grid_location || '?'}
+                    </span>
+                  </div>
+                  <Link
+                    href={`/activities/${activity.id}`}
+                    className="text-xs text-blue-600 hover:text-blue-700 mt-1 inline-block"
+                  >
+                    Edit
+                  </Link>
+                </div>
+              ))}
+            </div>
           </div>
         )}
+
+        {/* Process Map */}
+        <div className="flex-1 relative">
+          {error ? (
+            <div className="flex items-center justify-center h-full text-red-600">
+              {error}
+            </div>
+          ) : assignedActivities.length > 0 ? (
+            <ProcessMap
+              activities={assignedActivities}
+              swimlanes={swimlanes}
+              onPositionUpdate={handlePositionUpdate}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              {loading ? 'Loading activities...' : (
+                unassignedActivities.length > 0
+                  ? 'Assign step positions to activities to see them on the map'
+                  : 'No activities in this workflow'
+              )}
+            </div>
+          )}
+        </div>
       </main>
 
       {/* Legend */}

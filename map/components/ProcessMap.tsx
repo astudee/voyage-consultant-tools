@@ -21,6 +21,7 @@ import { Activity, SwimlaneConfig } from '@/lib/types';
 interface ProcessMapProps {
   activities: Activity[];
   swimlanes: SwimlaneConfig[];
+  onPositionUpdate?: (activityId: number, newGridLocation: string) => void;
 }
 
 // Grid spacing constants
@@ -52,8 +53,9 @@ const nodeTypes = {
   decision: DecisionNode,
 };
 
-export default function ProcessMap({ activities, swimlanes }: ProcessMapProps) {
+export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: ProcessMapProps) {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<{ x: number; y: number } | null>(null);
 
   // Build swimlane name map
   const swimlaneNames = useMemo(() => {
@@ -155,6 +157,76 @@ export default function ProcessMap({ activities, swimlanes }: ProcessMapProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  // Convert screen position to grid location
+  const positionToGridLocation = (x: number, y: number): string | null => {
+    const col = Math.round((x - SWIMLANE_LABEL_WIDTH) / COLUMN_WIDTH);
+    const row = Math.round((y - PADDING_TOP) / ROW_HEIGHT);
+
+    if (col < 0 || row < 0 || row > 25) return null;
+
+    const letter = String.fromCharCode('A'.charCodeAt(0) + row);
+    const number = col + 1;
+    return `${letter}${number}`;
+  };
+
+  // Handle node drag end to update position
+  const handleNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
+    if (!onPositionUpdate) return;
+
+    const newGridLocation = positionToGridLocation(node.position.x, node.position.y);
+    if (!newGridLocation) return;
+
+    // Extract activity ID from node ID (format: "activity-123")
+    const activityId = parseInt(node.id.replace('activity-', ''), 10);
+    if (isNaN(activityId)) return;
+
+    // Find the activity to get its current grid location
+    const activity = activities.find(a => a.id === activityId);
+    if (!activity || activity.grid_location === newGridLocation) return;
+
+    onPositionUpdate(activityId, newGridLocation);
+  }, [activities, onPositionUpdate]);
+
+  // Handle drop from unassigned sidebar
+  const handleDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    setDropIndicator(null);
+
+    if (!onPositionUpdate) return;
+
+    const activityId = event.dataTransfer.getData('activity-id');
+    const swimlane = event.dataTransfer.getData('activity-swimlane');
+
+    if (!activityId || !swimlane) return;
+
+    // Get drop position relative to the map container
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+
+    // Calculate column (step number)
+    const col = Math.max(1, Math.round((x - SWIMLANE_LABEL_WIDTH) / COLUMN_WIDTH) + 1);
+
+    // Create new grid location preserving the swimlane letter
+    const newGridLocation = `${swimlane}${col}`;
+
+    onPositionUpdate(parseInt(activityId, 10), newGridLocation);
+  }, [onPositionUpdate]);
+
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+
+    setDropIndicator({ x, y });
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDropIndicator(null);
+  }, []);
+
   // Find the max row used for swimlane background
   const maxRow = useMemo(() => {
     let max = 0;
@@ -210,11 +282,27 @@ export default function ProcessMap({ activities, swimlanes }: ProcessMapProps) {
   }, [maxRow, swimlaneNames]);
 
   return (
-    <div className="w-full h-full relative">
+    <div
+      className="w-full h-full relative"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
       {/* Swimlane labels overlay */}
       <div className="absolute inset-0 pointer-events-none z-10">
         {swimlaneBackgrounds}
       </div>
+
+      {/* Drop indicator */}
+      {dropIndicator && (
+        <div
+          className="absolute w-40 h-20 border-2 border-dashed border-blue-500 bg-blue-100 bg-opacity-50 rounded-lg pointer-events-none z-20"
+          style={{
+            left: dropIndicator.x - 80,
+            top: dropIndicator.y - 40,
+          }}
+        />
+      )}
 
       {/* React Flow canvas */}
       <ReactFlow
@@ -222,7 +310,9 @@ export default function ProcessMap({ activities, swimlanes }: ProcessMapProps) {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStop={handleNodeDragStop}
         nodeTypes={nodeTypes}
+        nodesDraggable={!!onPositionUpdate}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.3}

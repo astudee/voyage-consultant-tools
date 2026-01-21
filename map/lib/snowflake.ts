@@ -337,7 +337,7 @@ export async function saveSwimlaneConfig(
 // Fetch all workflows
 export async function getWorkflows(): Promise<Workflow[]> {
   const sql = `
-    SELECT id, workflow_name, description
+    SELECT id, workflow_name, description, created_at
     FROM workflows
     ORDER BY workflow_name
   `;
@@ -348,6 +348,7 @@ export async function getWorkflows(): Promise<Workflow[]> {
     id: row.ID as number,
     workflow_name: row.WORKFLOW_NAME as string,
     description: row.DESCRIPTION as string,
+    created_at: row.CREATED_AT as string,
   }));
 }
 
@@ -365,6 +366,26 @@ export async function createWorkflow(name: string, description?: string): Promis
   );
 
   return nextId;
+}
+
+// Update an existing workflow
+export async function updateWorkflow(workflowId: number, name: string, description?: string): Promise<void> {
+  await executeQuery(
+    `UPDATE workflows SET workflow_name = ?, description = ?, modified_at = CURRENT_TIMESTAMP() WHERE id = ?`,
+    [name, description || null, workflowId]
+  );
+}
+
+// Delete a workflow and all associated data
+export async function deleteWorkflow(workflowId: number): Promise<void> {
+  // Delete associated activities first (foreign key constraint)
+  await executeQuery('DELETE FROM activities WHERE workflow_id = ?', [workflowId]);
+
+  // Delete associated swimlane configs
+  await executeQuery('DELETE FROM swimlane_config WHERE workflow_id = ?', [workflowId]);
+
+  // Delete the workflow
+  await executeQuery('DELETE FROM workflows WHERE id = ?', [workflowId]);
 }
 
 // Fetch t-shirt config

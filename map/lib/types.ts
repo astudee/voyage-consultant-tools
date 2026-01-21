@@ -96,6 +96,7 @@ export interface Workflow {
   id: number;
   workflow_name: string;
   description: string;
+  created_at: string;
 }
 
 export interface TshirtConfig {

@@ -2,20 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Activity, Workflow } from '@/lib/types';
+import { Activity } from '@/lib/types';
 import { useSettings } from '@/lib/SettingsContext';
+import { useWorkflow } from '@/lib/WorkflowContext';
 
 export default function ActivitiesPage() {
   const { settings, workHoursPerMonth } = useSettings();
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<number | null>(null);
+  const { workflows, selectedWorkflowId, selectWorkflow, swimlanes, loading: workflowLoading } = useWorkflow();
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showNewWorkflowForm, setShowNewWorkflowForm] = useState(false);
-  const [newWorkflowName, setNewWorkflowName] = useState('');
-  const [newWorkflowDescription, setNewWorkflowDescription] = useState('');
-  const [creatingWorkflow, setCreatingWorkflow] = useState(false);
 
   // Calculate costs using dynamic settings
   const calculateCosts = (activity: Activity) => {
@@ -56,34 +52,14 @@ export default function ActivitiesPage() {
     return null;
   };
 
-  // Fetch workflows on mount
-  useEffect(() => {
-    async function fetchWorkflows() {
-      try {
-        const res = await fetch('/api/workflows');
-        const data = await res.json();
-
-        if (data.error) {
-          setError(data.error);
-          return;
-        }
-
-        setWorkflows(data.workflows || []);
-
-        // Auto-select first workflow
-        if (data.workflows?.length > 0 && !selectedWorkflowId) {
-          setSelectedWorkflowId(data.workflows[0].id);
-        }
-      } catch (err) {
-        setError('Failed to fetch workflows');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchWorkflows();
-  }, [selectedWorkflowId]);
+  // Get swimlane name for display
+  const getSwimlaneName = (gridLocation: string | null) => {
+    if (!gridLocation) return '-';
+    const letter = gridLocation.match(/^[A-Z]/)?.[0];
+    if (!letter) return '-';
+    const swimlane = swimlanes.find((s) => s.swimlane_letter === letter);
+    return swimlane ? `${letter} - ${swimlane.swimlane_name}` : letter;
+  };
 
   // Fetch activities when workflow changes
   useEffect(() => {
@@ -112,42 +88,6 @@ export default function ActivitiesPage() {
 
     fetchActivities();
   }, [selectedWorkflowId]);
-
-  const handleCreateWorkflow = async () => {
-    if (!newWorkflowName.trim()) return;
-
-    setCreatingWorkflow(true);
-    try {
-      const res = await fetch('/api/workflows', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newWorkflowName.trim(),
-          description: newWorkflowDescription.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-        return;
-      }
-
-      // Refresh workflows and select the new one
-      const workflowsRes = await fetch('/api/workflows');
-      const workflowsData = await workflowsRes.json();
-      setWorkflows(workflowsData.workflows || []);
-      setSelectedWorkflowId(data.id);
-      setShowNewWorkflowForm(false);
-      setNewWorkflowName('');
-      setNewWorkflowDescription('');
-    } catch (err) {
-      setError('Failed to create workflow');
-      console.error(err);
-    } finally {
-      setCreatingWorkflow(false);
-    }
-  };
 
   const handleDeleteActivity = async (activityId: number) => {
     if (!confirm('Are you sure you want to delete this activity?')) return;
@@ -198,31 +138,26 @@ export default function ActivitiesPage() {
           <h1 className="text-xl font-bold text-gray-800">Activities</h1>
 
           {/* Workflow selector */}
-          {!showNewWorkflowForm && (
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedWorkflowId || ''}
-                onChange={(e) => setSelectedWorkflowId(Number(e.target.value))}
-                className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Select Workflow --</option>
-                {workflows.map((wf) => (
-                  <option key={wf.id} value={wf.id}>
-                    {wf.workflow_name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => setShowNewWorkflowForm(true)}
-                className="text-sm text-blue-600 hover:text-blue-700"
-              >
-                + New Workflow
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedWorkflowId || ''}
+              onChange={(e) => selectWorkflow(Number(e.target.value) || null)}
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Select Workflow --</option>
+              {workflows.map((wf) => (
+                <option key={wf.id} value={wf.id}>
+                  {wf.workflow_name}
+                </option>
+              ))}
+            </select>
+            <Link href="/workflows" className="text-sm text-blue-600 hover:text-blue-700">
+              Manage Workflows
+            </Link>
+          </div>
         </div>
 
-        {selectedWorkflowId && !showNewWorkflowForm && (
+        {selectedWorkflowId && (
           <Link
             href={`/activities/new?workflowId=${selectedWorkflowId}`}
             className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
@@ -231,56 +166,6 @@ export default function ActivitiesPage() {
           </Link>
         )}
       </header>
-
-      {/* New Workflow Form */}
-      {showNewWorkflowForm && (
-        <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">Create New Workflow</h2>
-          <div className="flex gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Workflow Name *
-              </label>
-              <input
-                type="text"
-                value={newWorkflowName}
-                onChange={(e) => setNewWorkflowName(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g., Claims Processing"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <input
-                type="text"
-                value={newWorkflowDescription}
-                onChange={(e) => setNewWorkflowDescription(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-80 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Optional description"
-              />
-            </div>
-            <button
-              onClick={handleCreateWorkflow}
-              disabled={creatingWorkflow || !newWorkflowName.trim()}
-              className="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
-            >
-              {creatingWorkflow ? 'Creating...' : 'Create'}
-            </button>
-            <button
-              onClick={() => {
-                setShowNewWorkflowForm(false);
-                setNewWorkflowName('');
-                setNewWorkflowDescription('');
-              }}
-              className="text-gray-600 px-4 py-1.5 rounded-md text-sm hover:bg-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Error display */}
       {error && (
@@ -291,18 +176,23 @@ export default function ActivitiesPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        {!selectedWorkflowId ? (
+        {workflowLoading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-500">Loading...</p>
+          </div>
+        ) : !selectedWorkflowId ? (
           <div className="text-center py-12 text-gray-500">
             {workflows.length === 0 ? (
               <>
                 <p className="text-lg">No workflows yet.</p>
                 <p className="mt-2">Create a workflow to get started.</p>
-                <button
-                  onClick={() => setShowNewWorkflowForm(true)}
-                  className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700"
+                <Link
+                  href="/workflows"
+                  className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700"
                 >
                   Create First Workflow
-                </button>
+                </Link>
               </>
             ) : (
               <p>Select a workflow to view activities.</p>
@@ -340,7 +230,10 @@ export default function ActivitiesPage() {
                       Type
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Grid
+                      Swimlane
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Step
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -359,9 +252,11 @@ export default function ActivitiesPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {activities.map((activity) => {
                     const costs = calculateCosts(activity);
+                    const stepNumber = activity.grid_location?.match(/\d+/)?.[0];
+                    const isUnassigned = !stepNumber;
 
                     return (
-                      <tr key={activity.id} className="hover:bg-gray-50">
+                      <tr key={activity.id} className={`hover:bg-gray-50 ${isUnassigned ? 'bg-yellow-50' : ''}`}>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                           {activity.id}
                         </td>
@@ -372,7 +267,14 @@ export default function ActivitiesPage() {
                           {activity.activity_type}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          {activity.grid_location || '-'}
+                          {getSwimlaneName(activity.grid_location)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {isUnassigned ? (
+                            <span className="text-yellow-600 italic">Unassigned</span>
+                          ) : (
+                            stepNumber
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
                           <StatusBadge status={activity.status} />
@@ -403,7 +305,7 @@ export default function ActivitiesPage() {
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={5} className="px-4 py-3 text-sm font-bold text-gray-900">
+                    <td colSpan={6} className="px-4 py-3 text-sm font-bold text-gray-900">
                       TOTAL
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, TshirtConfig } from '@/lib/types';
+import { Activity, TshirtConfig, SwimlaneConfig } from '@/lib/types';
+import { useWorkflow } from '@/lib/WorkflowContext';
 
 interface ActivityFormProps {
   activity?: Activity;
@@ -15,11 +16,24 @@ interface TshirtConfigMap {
 
 export default function ActivityForm({ activity, workflowId }: ActivityFormProps) {
   const router = useRouter();
+  const { swimlanes } = useWorkflow();
   const isEditing = !!activity;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tshirtConfig, setTshirtConfig] = useState<TshirtConfigMap>({});
+
+  // Parse existing grid_location into swimlane and step
+  const parseGridLocation = (gridLoc: string | null | undefined): { swimlane: string; step: string } => {
+    if (!gridLoc) return { swimlane: '', step: '' };
+    const letter = gridLoc.match(/^[A-Z]/)?.[0] || '';
+    const number = gridLoc.match(/\d+/)?.[0] || '';
+    return { swimlane: letter, step: number };
+  };
+
+  const { swimlane: initialSwimlane, step: initialStep } = parseGridLocation(activity?.grid_location);
+  const [selectedSwimlane, setSelectedSwimlane] = useState(initialSwimlane);
+  const [stepNumber, setStepNumber] = useState(initialStep);
 
   // Form state
   const [activityType, setActivityType] = useState<'task' | 'decision'>(
@@ -27,7 +41,6 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
   );
   const [formData, setFormData] = useState({
     activity_name: activity?.activity_name || '',
-    grid_location: activity?.grid_location || '',
     status: activity?.status || 'not_started',
     task_time_size: activity?.task_time_size || '',
     task_time_custom: activity?.task_time_custom?.toString() || '',
@@ -128,13 +141,16 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
       return;
     }
 
-    if (!formData.grid_location.trim()) {
-      setError('Grid location is required');
+    if (!selectedSwimlane) {
+      setError('Swimlane is required');
       return;
     }
 
     setLoading(true);
     setError(null);
+
+    // Build grid_location from swimlane and step (step is optional)
+    const gridLocation = stepNumber ? `${selectedSwimlane}${stepNumber}` : selectedSwimlane;
 
     try {
       // Build connections JSON
@@ -174,7 +190,7 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
         workflowId,
         activity_name: formData.activity_name.trim(),
         activity_type: activityType,
-        grid_location: formData.grid_location.trim().toUpperCase(),
+        grid_location: gridLocation,
         connections,
         status: formData.status || 'not_started',
         task_time_size:
@@ -296,7 +312,7 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
       {/* Basic Info */}
       <section className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Basic Info</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Activity Name *
@@ -321,18 +337,53 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
               <option value="decision">Decision</option>
             </select>
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Grid Location *
+              Swimlane *
+            </label>
+            <select
+              value={selectedSwimlane}
+              onChange={(e) => setSelectedSwimlane(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Select Swimlane --</option>
+              {swimlanes.length > 0 ? (
+                swimlanes.map((sl) => (
+                  <option key={sl.swimlane_letter} value={sl.swimlane_letter}>
+                    {sl.swimlane_letter} - {sl.swimlane_name}
+                  </option>
+                ))
+              ) : (
+                // Fallback to A-J if no swimlanes configured
+                ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map((letter) => (
+                  <option key={letter} value={letter}>
+                    {letter}
+                  </option>
+                ))
+              )}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              The row/lane this activity belongs to
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Step Position <span className="text-gray-400">(optional)</span>
             </label>
             <input
-              type="text"
-              name="grid_location"
-              value={formData.grid_location}
-              onChange={handleChange}
-              placeholder="e.g., A1, B3"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+              type="number"
+              value={stepNumber}
+              onChange={(e) => setStepNumber(e.target.value)}
+              placeholder="e.g., 1, 2, 3..."
+              min="1"
+              max="20"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Column position on the map. Leave empty for unassigned activities.
+            </p>
           </div>
         </div>
       </section>
