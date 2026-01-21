@@ -803,6 +803,9 @@ else:
                             st.session_state.editing_id = cell_data['id']
                             st.session_state.selected_grid = grid_loc
                             st.session_state.show_form = True
+                            # Set activity type from cell data
+                            st.session_state.activity_type = cell_data['type'] or 'task'
+                            st.session_state.activity_type_initialized = True
                             existing = load_activity(cell_data['id'])
                             if existing and existing.get('ATTACHMENTS'):
                                 try:
@@ -817,6 +820,8 @@ else:
                                     st.session_state.decision_branches = max(2, len(conns))
                                 except:
                                     st.session_state.decision_branches = 2
+                            else:
+                                st.session_state.decision_branches = 2
                             st.rerun()
                 else:
                     # Empty cell
@@ -901,6 +906,9 @@ try:
                 st.session_state.editing_id = activity['id']
                 st.session_state.show_form = True
                 st.session_state.selected_grid = activity['grid_location']
+                # Set activity type from existing data
+                st.session_state.activity_type = activity['type'] or 'task'
+                st.session_state.activity_type_initialized = True
                 existing = load_activity(activity['id'])
                 if existing and existing.get('ATTACHMENTS'):
                     try:
@@ -915,6 +923,8 @@ try:
                         st.session_state.decision_branches = max(2, len(conns))
                     except:
                         st.session_state.decision_branches = 2
+                else:
+                    st.session_state.decision_branches = 2
                 st.rerun()
 
         # Total row
