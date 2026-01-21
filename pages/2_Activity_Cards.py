@@ -1169,10 +1169,10 @@ if st.session_state.show_form and not st.session_state.naming_swimlane and not s
             phase = st.number_input("Phase", min_value=0, max_value=10,
                 value=int(existing.get('PHASE', 0)) if existing and existing.get('PHASE') else 0)
         with col3:
-            status_options = ['', 'not_started', 'in_progress', 'complete']
+            status_options = ['not_started', 'analyzing', 'in_progress', 'transformed', 'deferred']
             existing_status = existing.get('STATUS', '') if existing else ''
             status_idx = status_options.index(existing_status) if existing_status in status_options else 0
-            status = st.selectbox("Status", status_options, index=status_idx)
+            status = st.selectbox("Transformation Status", status_options, index=status_idx)
         with col4:
             pass
 
