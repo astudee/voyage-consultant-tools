@@ -52,14 +52,26 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
 
   const costs = calculateCosts();
 
-  const formatCurrency = (value: number | null) => {
+  const formatCurrency = (value: number | null, decimals: number = 2) => {
     if (value === null || value === undefined) return '-';
-    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+    return `$${value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
   };
 
   const formatNumber = (value: number | null) => {
     if (value === null || value === undefined) return '-';
     return value.toLocaleString('en-US');
+  };
+
+  // Get t-shirt size abbreviation
+  const getSizeAbbrev = (size: string | null) => {
+    if (!size || size === 'Other') return null;
+    const abbrevs: Record<string, string> = {
+      'Small': 'S',
+      'Medium': 'M',
+      'Large': 'L',
+      'XL': 'XL',
+    };
+    return abbrevs[size] || null;
   };
 
   const getStatusLabel = (status: string) => {
@@ -178,19 +190,34 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
                 {activity.task_time_midpoint && (
                   <div>
                     <span className="text-xs text-gray-500">Task Time</span>
-                    <p className="text-gray-800">{activity.task_time_midpoint} min</p>
+                    <p className="text-gray-800">
+                      {activity.task_time_midpoint} min
+                      {getSizeAbbrev(activity.task_time_size) && (
+                        <span className="text-gray-400 ml-1">({getSizeAbbrev(activity.task_time_size)})</span>
+                      )}
+                    </p>
                   </div>
                 )}
                 {activity.labor_rate_midpoint && (
                   <div>
                     <span className="text-xs text-gray-500">Labor Rate</span>
-                    <p className="text-gray-800">{formatCurrency(activity.labor_rate_midpoint)}/hr</p>
+                    <p className="text-gray-800">
+                      {formatCurrency(activity.labor_rate_midpoint)}/hr
+                      {getSizeAbbrev(activity.labor_rate_size) && (
+                        <span className="text-gray-400 ml-1">({getSizeAbbrev(activity.labor_rate_size)})</span>
+                      )}
+                    </p>
                   </div>
                 )}
                 {activity.volume_midpoint && (
                   <div>
                     <span className="text-xs text-gray-500">Volume</span>
-                    <p className="text-gray-800">{formatNumber(activity.volume_midpoint)}/mo</p>
+                    <p className="text-gray-800">
+                      {formatNumber(activity.volume_midpoint)}/mo
+                      {getSizeAbbrev(activity.volume_size) && (
+                        <span className="text-gray-400 ml-1">({getSizeAbbrev(activity.volume_size)})</span>
+                      )}
+                    </p>
                   </div>
                 )}
               </div>
@@ -199,11 +226,11 @@ export default function DetailPanel({ activity, onClose }: DetailPanelProps) {
                 <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
                   <div>
                     <span className="text-xs text-gray-500">Monthly Cost</span>
-                    <p className="text-gray-800 font-medium">{formatCurrency(costs.monthly_cost)}</p>
+                    <p className="text-gray-800 font-medium">{formatCurrency(costs.monthly_cost, 0)}</p>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">Annual Cost</span>
-                    <p className="text-gray-800 font-medium">{formatCurrency(costs.annual_cost)}</p>
+                    <p className="text-gray-800 font-medium">{formatCurrency(costs.annual_cost, 0)}</p>
                   </div>
                 </div>
               )}
