@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Activity, Workflow, calculateActivityCosts, CONFIG } from '@/lib/types';
+import { Activity, Workflow } from '@/lib/types';
+import { useSettings } from '@/lib/SettingsContext';
 
 export default function ActivitiesPage() {
+  const { settings, workHoursPerMonth } = useSettings();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<number | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -14,6 +16,45 @@ export default function ActivitiesPage() {
   const [newWorkflowName, setNewWorkflowName] = useState('');
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('');
   const [creatingWorkflow, setCreatingWorkflow] = useState(false);
+
+  // Calculate costs using dynamic settings
+  const calculateCosts = (activity: Activity) => {
+    let taskTime: number | null = null;
+    if (activity.task_time_size === 'Other' && activity.task_time_custom) {
+      taskTime = activity.task_time_custom;
+    } else if (activity.task_time_midpoint) {
+      taskTime = activity.task_time_midpoint;
+    }
+
+    let laborRate: number | null = null;
+    if (activity.labor_rate_size === 'Other' && activity.labor_rate_custom) {
+      laborRate = activity.labor_rate_custom;
+    } else if (activity.labor_rate_midpoint) {
+      laborRate = activity.labor_rate_midpoint;
+    }
+
+    let volume: number | null = null;
+    if (activity.volume_size === 'Other' && activity.volume_custom) {
+      volume = activity.volume_custom;
+    } else if (activity.volume_midpoint) {
+      volume = activity.volume_midpoint;
+    }
+
+    if (taskTime && laborRate && volume && taskTime > 0) {
+      const effectiveTaskTime = taskTime / settings.productivity_factor;
+      const tasksPerHour = 60 / effectiveTaskTime;
+      const costPerTask = laborRate / tasksPerHour;
+      const monthlyCost = costPerTask * volume;
+      const annualCost = monthlyCost * 12;
+
+      return {
+        monthly_cost: monthlyCost,
+        annual_cost: annualCost,
+      };
+    }
+
+    return null;
+  };
 
   // Fetch workflows on mount
   useEffect(() => {
@@ -134,7 +175,7 @@ export default function ActivitiesPage() {
   let totalMonthly = 0;
   let totalAnnual = 0;
   activities.forEach((activity) => {
-    const costs = calculateActivityCosts(activity);
+    const costs = calculateCosts(activity);
     if (costs) {
       totalMonthly += costs.monthly_cost;
       totalAnnual += costs.annual_cost;
@@ -317,7 +358,7 @@ export default function ActivitiesPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {activities.map((activity) => {
-                    const costs = calculateActivityCosts(activity);
+                    const costs = calculateCosts(activity);
 
                     return (
                       <tr key={activity.id} className="hover:bg-gray-50">
@@ -379,9 +420,9 @@ export default function ActivitiesPage() {
 
             {/* Cost assumptions */}
             <p className="mt-4 text-xs text-gray-500">
-              * Assumes {(CONFIG.productivity_factor * 100).toFixed(0)}% productivity factor,{' '}
-              {CONFIG.hours_per_year.toLocaleString()} hrs/year - {CONFIG.training_hours_per_year}{' '}
-              training = {CONFIG.work_hours_per_month.toFixed(0)} hrs/month capacity
+              * Assumes {(settings.productivity_factor * 100).toFixed(0)}% productivity factor,{' '}
+              {settings.hours_per_year.toLocaleString()} hrs/year - {settings.training_hours_per_year}{' '}
+              training = {workHoursPerMonth.toFixed(0)} hrs/month capacity
             </p>
           </>
         )}
