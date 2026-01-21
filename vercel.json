@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd map && npm run build",
+  "outputDirectory": "map/.next",
+  "installCommand": "cd map && npm install",
+  "framework": "nextjs"
+}
