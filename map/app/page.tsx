@@ -126,7 +126,7 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-800">Process Map</h1>
+          <h1 className="text-xl font-bold text-gray-800">Process Transformation</h1>
 
           {/* Workflow selector */}
           <select
@@ -195,7 +195,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Process Map */}
+        {/* Process Transformation */}
         <div className="flex-1 relative">
           {error ? (
             <div className="flex items-center justify-center h-full text-red-600">

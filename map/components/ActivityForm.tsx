@@ -39,14 +39,22 @@ export default function ActivityForm({ activity, workflowId }: ActivityFormProps
   const [activityType, setActivityType] = useState<'task' | 'decision'>(
     activity?.activity_type || 'task'
   );
+
+  // Determine initial size values - if there's a custom value but no size, use "Other"
+  const getInitialSize = (size: string | null | undefined, customValue: number | null | undefined): string => {
+    if (size) return size;
+    if (customValue != null) return 'Other';
+    return '';
+  };
+
   const [formData, setFormData] = useState({
     activity_name: activity?.activity_name || '',
     status: activity?.status || 'not_started',
-    task_time_size: activity?.task_time_size || '',
+    task_time_size: getInitialSize(activity?.task_time_size, activity?.task_time_custom),
     task_time_custom: activity?.task_time_custom?.toString() || '',
-    labor_rate_size: activity?.labor_rate_size || '',
+    labor_rate_size: getInitialSize(activity?.labor_rate_size, activity?.labor_rate_custom),
     labor_rate_custom: activity?.labor_rate_custom?.toString() || '',
-    volume_size: activity?.volume_size || '',
+    volume_size: getInitialSize(activity?.volume_size, activity?.volume_custom),
     volume_custom: activity?.volume_custom?.toString() || '',
     target_cycle_time_hours: activity?.target_cycle_time_hours?.toString() || '',
     actual_cycle_time_hours: activity?.actual_cycle_time_hours?.toString() || '',
