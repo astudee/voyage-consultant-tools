@@ -7,6 +7,7 @@ import jsPDF from 'jspdf';
 interface ExportMenuProps {
   workflowName: string;
   mapContainerRef: React.RefObject<HTMLDivElement | null>;
+  onBeforeExport?: () => Promise<void>;
 }
 
 type ExportSize = 'standard' | 'large' | 'plotter';
@@ -17,7 +18,7 @@ const sizeConfigs: Record<ExportSize, { label: string; scale: number; descriptio
   plotter: { label: 'Plotter', scale: 4, description: 'Large format printing' },
 };
 
-export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenuProps) {
+export default function ExportMenu({ workflowName, mapContainerRef, onBeforeExport }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedSize, setSelectedSize] = useState<ExportSize>('standard');
@@ -34,11 +35,21 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const loadImage = (src: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  };
+
   const addHeaderToCanvas = async (
     canvas: HTMLCanvasElement,
     scale: number
   ): Promise<HTMLCanvasElement> => {
-    const headerHeight = 80 * scale;
+    const headerHeight = 100 * scale;
     const padding = 20 * scale;
 
     // Create new canvas with header space
@@ -53,17 +64,25 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
 
-    // Draw logo (using text as fallback - in production would load actual logo)
-    ctx.fillStyle = '#669999'; // Voyage teal
-    ctx.font = `bold ${24 * scale}px Arial`;
-    ctx.fillText('VOYAGE ADVISORY', padding, 35 * scale);
+    // Try to load and draw logo
+    try {
+      const logo = await loadImage('/voyage-logo.png');
+      const logoHeight = 50 * scale;
+      const logoWidth = (logo.width / logo.height) * logoHeight;
+      ctx.drawImage(logo, padding, 15 * scale, logoWidth, logoHeight);
+    } catch {
+      // Fallback to text if logo fails to load
+      ctx.fillStyle = '#669999';
+      ctx.font = `bold ${24 * scale}px Arial`;
+      ctx.fillText('VOYAGE ADVISORY', padding, 45 * scale);
+    }
 
     // Draw workflow name
     ctx.fillStyle = '#333333';
-    ctx.font = `${16 * scale}px Arial`;
-    ctx.fillText(workflowName, padding, 60 * scale);
+    ctx.font = `bold ${18 * scale}px Arial`;
+    ctx.fillText(workflowName, padding, 80 * scale);
 
-    // Draw date
+    // Draw date (top right)
     ctx.fillStyle = '#666666';
     ctx.font = `${12 * scale}px Arial`;
     const date = new Date().toLocaleDateString('en-US', {
@@ -91,6 +110,11 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
     if (!mapContainerRef.current) {
       console.error('Map container ref not found');
       return null;
+    }
+
+    // Fit view to show all nodes before capturing
+    if (onBeforeExport) {
+      await onBeforeExport();
     }
 
     // Hide controls during capture

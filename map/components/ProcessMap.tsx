@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useImperativeHandle, forwardRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -10,6 +10,8 @@ import {
   useNodesState,
   useEdgesState,
   MarkerType,
+  useReactFlow,
+  ReactFlowProvider,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -21,11 +23,16 @@ import DetailPanel from './DetailPanel';
 import { Activity, SwimlaneConfig } from '@/lib/types';
 import type { DisplayMode } from '@/app/page';
 
+export interface ProcessMapHandle {
+  fitView: () => Promise<void>;
+}
+
 interface ProcessMapProps {
   activities: Activity[];
   swimlanes: SwimlaneConfig[];
   onPositionUpdate?: (activityId: number, newGridLocation: string) => void;
   displayMode?: DisplayMode;
+  onFitViewReady?: (fitView: () => Promise<void>) => void;
 }
 
 // Grid spacing constants
@@ -59,7 +66,25 @@ const nodeTypes = {
   swimlaneDivider: SwimlaneDivider,
 };
 
-export default function ProcessMap({ activities, swimlanes, onPositionUpdate, displayMode = 'grid' }: ProcessMapProps) {
+// Helper component to expose fitView
+function FitViewHelper({ onFitViewReady }: { onFitViewReady?: (fitView: () => Promise<void>) => void }) {
+  const { fitView } = useReactFlow();
+
+  useEffect(() => {
+    if (onFitViewReady) {
+      const fitViewAsync = async () => {
+        fitView({ padding: 0.1, duration: 0 });
+        // Wait for the fit to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+      };
+      onFitViewReady(fitViewAsync);
+    }
+  }, [fitView, onFitViewReady]);
+
+  return null;
+}
+
+export default function ProcessMap({ activities, swimlanes, onPositionUpdate, displayMode = 'grid', onFitViewReady }: ProcessMapProps) {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ x: number; y: number } | null>(null);
 
@@ -365,6 +390,7 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate, di
       >
         <Background color="#f0f0f0" gap={20} />
         <Controls />
+        <FitViewHelper onFitViewReady={onFitViewReady} />
       </ReactFlow>
 
       {/* Detail panel */}

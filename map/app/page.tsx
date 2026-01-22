@@ -32,6 +32,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [fitViewFn, setFitViewFn] = useState<(() => Promise<void>) | null>(null);
 
   // Fetch activities when workflow changes
   useEffect(() => {
@@ -188,6 +189,7 @@ export default function Home() {
             <ExportMenu
               workflowName={selectedWorkflow?.workflow_name || 'Process Map'}
               mapContainerRef={mapContainerRef}
+              onBeforeExport={fitViewFn || undefined}
             />
           )}
         </div>
@@ -248,6 +250,7 @@ export default function Home() {
               swimlanes={swimlanes}
               onPositionUpdate={handlePositionUpdate}
               displayMode={displayMode}
+              onFitViewReady={(fn) => setFitViewFn(() => fn)}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
