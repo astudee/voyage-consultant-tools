@@ -121,7 +121,10 @@ export default function ActivityNode({ data }: ActivityNodeProps) {
       className={`relative px-4 py-2 rounded-lg border-2 shadow-sm cursor-pointer hover:shadow-md transition-shadow min-w-[120px] ${getStatusColor()}`}
       onClick={() => onClick(activity)}
     >
-      <Handle type="target" position={Position.Left} className="w-2 h-2" />
+      {/* Target handles - can receive connections from multiple directions */}
+      <Handle type="target" position={Position.Left} id="left" className="w-2 h-2" />
+      <Handle type="target" position={Position.Top} id="top-target" className="w-2 h-2" />
+      <Handle type="target" position={Position.Bottom} id="bottom-target" className="w-2 h-2" />
 
       {getPlanBadge()}
 
@@ -133,7 +136,10 @@ export default function ActivityNode({ data }: ActivityNodeProps) {
         {displayValue.text}
       </div>
 
-      <Handle type="source" position={Position.Right} className="w-2 h-2" />
+      {/* Source handles - can send connections to multiple directions */}
+      <Handle type="source" position={Position.Right} id="right" className="w-2 h-2" />
+      <Handle type="source" position={Position.Top} id="top" className="w-2 h-2" />
+      <Handle type="source" position={Position.Bottom} id="bottom" className="w-2 h-2" />
     </div>
   );
 }

@@ -214,20 +214,41 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate, di
 
         const edgeId = `edge-${activity.id}-${targetActivity.id}-${idx}`;
 
-        // Determine source handle for decisions
-        let sourceHandle: string | undefined;
-        if (activity.activity_type === 'decision') {
-          // Try to route based on target position relative to source
-          const sourcePos = parseGridLocation(activity.grid_location);
-          const targetPos = parseGridLocation(targetActivity.grid_location);
+        // Determine optimal handles based on relative positions
+        const sourcePos = parseGridLocation(activity.grid_location);
+        const targetPos = parseGridLocation(targetActivity.grid_location);
 
-          if (sourcePos && targetPos) {
-            if (targetPos.row > sourcePos.row) {
+        let sourceHandle: string | undefined;
+        let targetHandle: string | undefined;
+
+        if (sourcePos && targetPos) {
+          const rowDiff = targetPos.row - sourcePos.row;
+          const colDiff = targetPos.col - sourcePos.col;
+
+          // Choose handles based on direction
+          if (Math.abs(rowDiff) > Math.abs(colDiff)) {
+            // Primarily vertical movement
+            if (rowDiff > 0) {
               sourceHandle = 'bottom';
-            } else if (targetPos.row < sourcePos.row) {
-              sourceHandle = 'top';
+              targetHandle = 'top-target';
             } else {
+              sourceHandle = 'top';
+              targetHandle = 'bottom-target';
+            }
+          } else {
+            // Primarily horizontal movement (or same row)
+            if (colDiff >= 0) {
               sourceHandle = 'right';
+              targetHandle = 'left';
+            } else {
+              // Going backwards - use top/bottom to avoid crossing
+              if (rowDiff >= 0) {
+                sourceHandle = 'bottom';
+                targetHandle = 'bottom-target';
+              } else {
+                sourceHandle = 'top';
+                targetHandle = 'top-target';
+              }
             }
           }
         }
@@ -237,6 +258,8 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate, di
           source: `activity-${activity.id}`,
           target: `activity-${targetActivity.id}`,
           sourceHandle,
+          targetHandle,
+          type: 'smoothstep',
           label: conn.condition || undefined,
           labelStyle: { fontSize: 10, fill: '#666' },
           labelBgStyle: { fill: 'white', fillOpacity: 0.8 },
@@ -244,8 +267,12 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate, di
             type: MarkerType.ArrowClosed,
             width: 15,
             height: 15,
+            color: '#64748b',
           },
-          style: { strokeWidth: 2 },
+          style: {
+            strokeWidth: 2,
+            stroke: '#64748b',
+          },
         });
       });
     });
