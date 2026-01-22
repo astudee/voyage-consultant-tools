@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import ProcessMap from '@/components/ProcessMap';
+import ExportMenu from '@/components/ExportMenu';
 import { Activity } from '@/lib/types';
 import { useWorkflow } from '@/lib/WorkflowContext';
 
@@ -21,6 +22,7 @@ export default function Home() {
     workflows,
     selectedWorkflowId,
     selectWorkflow,
+    selectedWorkflow,
     swimlanes,
     loading: workflowLoading
   } = useWorkflow();
@@ -29,6 +31,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
+  const mapContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch activities when workflow changes
   useEffect(() => {
@@ -179,6 +182,14 @@ export default function Home() {
             )}
             {loading && <span className="link-primary">Loading...</span>}
           </div>
+
+          {/* Export button */}
+          {assignedActivities.length > 0 && (
+            <ExportMenu
+              workflowName={selectedWorkflow?.workflow_name || 'Process Map'}
+              mapContainerRef={mapContainerRef}
+            />
+          )}
         </div>
       </header>
 
@@ -226,7 +237,7 @@ export default function Home() {
         )}
 
         {/* Process Transformation */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative" ref={mapContainerRef}>
           {error ? (
             <div className="flex items-center justify-center h-full text-red-600">
               {error}
