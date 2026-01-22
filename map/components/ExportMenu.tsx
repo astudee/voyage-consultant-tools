@@ -88,30 +88,38 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
   };
 
   const captureMap = async (scale: number): Promise<HTMLCanvasElement | null> => {
-    if (!mapContainerRef.current) return null;
-
-    // Find the React Flow viewport
-    const viewport = mapContainerRef.current.querySelector('.react-flow__viewport');
-    if (!viewport) return null;
+    if (!mapContainerRef.current) {
+      console.error('Map container ref not found');
+      return null;
+    }
 
     // Hide controls during capture
     const controls = mapContainerRef.current.querySelector('.react-flow__controls');
     const minimap = mapContainerRef.current.querySelector('.react-flow__minimap');
+    const panel = mapContainerRef.current.querySelector('.react-flow__panel');
+
     if (controls) (controls as HTMLElement).style.display = 'none';
     if (minimap) (minimap as HTMLElement).style.display = 'none';
+    if (panel) (panel as HTMLElement).style.display = 'none';
 
     try {
       const canvas = await html2canvas(mapContainerRef.current, {
         scale,
         backgroundColor: '#f9fafb',
-        logging: false,
+        logging: true, // Enable logging to debug
         useCORS: true,
+        allowTaint: true,
+        foreignObjectRendering: true,
       });
       return canvas;
+    } catch (err) {
+      console.error('html2canvas error:', err);
+      throw err;
     } finally {
       // Restore controls
       if (controls) (controls as HTMLElement).style.display = '';
       if (minimap) (minimap as HTMLElement).style.display = '';
+      if (panel) (panel as HTMLElement).style.display = '';
     }
   };
 
@@ -120,11 +128,13 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
     try {
       const scale = sizeConfigs[selectedSize].scale;
       const canvas = await captureMap(scale);
-      if (!canvas) return;
+      if (!canvas) {
+        throw new Error('Failed to capture map - container not found');
+      }
 
       const canvasWithHeader = await addHeaderToCanvas(canvas, scale);
 
-      // Calculate PDF dimensions (convert pixels to mm at 96 DPI)
+      // Calculate PDF dimensions
       const imgWidth = canvasWithHeader.width / scale;
       const imgHeight = canvasWithHeader.height / scale;
 
@@ -149,7 +159,7 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
       pdf.save(`${workflowName.replace(/\s+/g, '_')}_Process_Map.pdf`);
     } catch (error) {
       console.error('PDF export failed:', error);
-      alert('Export failed. Please try again.');
+      alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsExporting(false);
       setIsOpen(false);
@@ -187,7 +197,9 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
     try {
       const scale = sizeConfigs[selectedSize].scale;
       const canvas = await captureMap(scale);
-      if (!canvas) return;
+      if (!canvas) {
+        throw new Error('Failed to capture map - container not found');
+      }
 
       const canvasWithHeader = await addHeaderToCanvas(canvas, scale);
 
@@ -198,7 +210,7 @@ export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenu
       link.click();
     } catch (error) {
       console.error('PNG export failed:', error);
-      alert('Export failed. Please try again.');
+      alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsExporting(false);
       setIsOpen(false);
