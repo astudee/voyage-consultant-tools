@@ -29,6 +29,11 @@ export default function Sidebar() {
   const { selectedWorkflow } = useWorkflow();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Don't render sidebar on login page
+  if (pathname === '/login') {
+    return null;
+  }
+
   return (
     <aside className="w-56 text-white flex flex-col" style={{ backgroundColor: brandColors.teal }}>
       <div className="p-4 border-b" style={{ borderColor: brandColors.darkBlue + '44' }}>

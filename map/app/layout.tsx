@@ -4,6 +4,8 @@ import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import { SettingsProvider } from "@/lib/SettingsContext";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import SessionProvider from "@/components/SessionProvider";
+import ClientAuthGuard from "@/components/ClientAuthGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,16 +32,20 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <SettingsProvider>
-          <WorkflowProvider>
-            <div className="flex h-screen">
-              <Sidebar />
-              <main className="flex-1 overflow-hidden">
-                {children}
-              </main>
-            </div>
-          </WorkflowProvider>
-        </SettingsProvider>
+        <SessionProvider>
+          <ClientAuthGuard>
+            <SettingsProvider>
+              <WorkflowProvider>
+                <div className="flex h-screen">
+                  <Sidebar />
+                  <main className="flex-1 overflow-hidden">
+                    {children}
+                  </main>
+                </div>
+              </WorkflowProvider>
+            </SettingsProvider>
+          </ClientAuthGuard>
+        </SessionProvider>
       </body>
     </html>
   );
