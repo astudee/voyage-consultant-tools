@@ -19,11 +19,13 @@ import SwimlaneLabel from './SwimlaneLabel';
 import SwimlaneDivider from './SwimlaneDivider';
 import DetailPanel from './DetailPanel';
 import { Activity, SwimlaneConfig } from '@/lib/types';
+import type { DisplayMode } from '@/app/page';
 
 interface ProcessMapProps {
   activities: Activity[];
   swimlanes: SwimlaneConfig[];
   onPositionUpdate?: (activityId: number, newGridLocation: string) => void;
+  displayMode?: DisplayMode;
 }
 
 // Grid spacing constants
@@ -57,7 +59,7 @@ const nodeTypes = {
   swimlaneDivider: SwimlaneDivider,
 };
 
-export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: ProcessMapProps) {
+export default function ProcessMap({ activities, swimlanes, onPositionUpdate, displayMode = 'grid' }: ProcessMapProps) {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ x: number; y: number } | null>(null);
 
@@ -162,12 +164,13 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate }: 
         data: {
           activity,
           onClick: setSelectedActivity,
+          displayMode,
         },
       });
     });
 
     return nodes;
-  }, [activities, maxRow, maxCol, swimlaneNames]);
+  }, [activities, maxRow, maxCol, swimlaneNames, displayMode]);
 
   // Convert connections to edges
   const initialEdges: Edge[] = useMemo(() => {

@@ -6,6 +6,16 @@ import ProcessMap from '@/components/ProcessMap';
 import { Activity } from '@/lib/types';
 import { useWorkflow } from '@/lib/WorkflowContext';
 
+export type DisplayMode = 'grid' | 'cost' | 'time' | 'rate' | 'phase';
+
+const displayModeOptions: { value: DisplayMode; label: string }[] = [
+  { value: 'grid', label: 'Grid' },
+  { value: 'cost', label: 'Annual Cost' },
+  { value: 'time', label: 'Task Time' },
+  { value: 'rate', label: 'Hourly Rate' },
+  { value: 'phase', label: 'Phase' },
+];
+
 export default function Home() {
   const {
     workflows,
@@ -18,6 +28,7 @@ export default function Home() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
 
   // Fetch activities when workflow changes
   useEffect(() => {
@@ -143,12 +154,31 @@ export default function Home() {
           </select>
         </div>
 
-        <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span>{assignedActivities.length} on map</span>
-          {unassignedActivities.length > 0 && (
-            <span className="text-yellow-600">{unassignedActivities.length} unassigned</span>
-          )}
-          {loading && <span className="link-primary">Loading...</span>}
+        <div className="flex items-center gap-4">
+          {/* Display mode selector */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
+            {displayModeOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setDisplayMode(option.value)}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  displayMode === option.value
+                    ? 'bg-white shadow text-gray-800 font-medium'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-4 text-sm text-gray-500">
+            <span>{assignedActivities.length} on map</span>
+            {unassignedActivities.length > 0 && (
+              <span className="text-yellow-600">{unassignedActivities.length} unassigned</span>
+            )}
+            {loading && <span className="link-primary">Loading...</span>}
+          </div>
         </div>
       </header>
 
@@ -206,6 +236,7 @@ export default function Home() {
               activities={assignedActivities}
               swimlanes={swimlanes}
               onPositionUpdate={handlePositionUpdate}
+              displayMode={displayMode}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">

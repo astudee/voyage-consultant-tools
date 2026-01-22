@@ -1,17 +1,85 @@
 'use client';
 
 import { Handle, Position } from '@xyflow/react';
-import { Activity } from '@/lib/types';
+import { Activity, calculateActivityCosts } from '@/lib/types';
+import type { DisplayMode } from '@/app/page';
 
 interface ActivityNodeProps {
   data: {
     activity: Activity;
     onClick: (activity: Activity) => void;
+    displayMode?: DisplayMode;
   };
 }
 
 export default function ActivityNode({ data }: ActivityNodeProps) {
-  const { activity, onClick } = data;
+  const { activity, onClick, displayMode = 'grid' } = data;
+
+  // Get effective values
+  const getEffectiveTaskTime = (): number | null => {
+    if (activity.task_time_custom != null) return activity.task_time_custom;
+    return activity.task_time_midpoint || null;
+  };
+
+  const getEffectiveLaborRate = (): number | null => {
+    if (activity.labor_rate_custom != null) return activity.labor_rate_custom;
+    return activity.labor_rate_midpoint || null;
+  };
+
+  // Format display value based on mode
+  const getDisplayValue = (): { text: string; colorClass: string } => {
+    switch (displayMode) {
+      case 'cost': {
+        const costs = calculateActivityCosts(activity);
+        if (!costs) return { text: '-', colorClass: 'text-gray-400' };
+        const annual = costs.annual_cost;
+        const text = annual >= 1000 ? `$${Math.round(annual / 1000)}k` : `$${Math.round(annual)}`;
+        // Color coding: green < $10k, yellow $10k-$50k, red > $50k
+        let colorClass = 'text-green-600 bg-green-50';
+        if (annual >= 50000) colorClass = 'text-red-600 bg-red-50';
+        else if (annual >= 10000) colorClass = 'text-yellow-600 bg-yellow-50';
+        return { text, colorClass };
+      }
+      case 'time': {
+        const time = getEffectiveTaskTime();
+        if (!time) return { text: '-', colorClass: 'text-gray-400' };
+        const text = `${time.toFixed(1)} min`;
+        // Color coding: green < 5 min, yellow 5-15 min, red > 15 min
+        let colorClass = 'text-green-600 bg-green-50';
+        if (time > 15) colorClass = 'text-red-600 bg-red-50';
+        else if (time >= 5) colorClass = 'text-yellow-600 bg-yellow-50';
+        return { text, colorClass };
+      }
+      case 'rate': {
+        const rate = getEffectiveLaborRate();
+        if (!rate) return { text: '-', colorClass: 'text-gray-400' };
+        const text = `$${Math.round(rate)}/hr`;
+        // Color coding: green < $30, yellow $30-$60, red > $60
+        let colorClass = 'text-green-600 bg-green-50';
+        if (rate > 60) colorClass = 'text-red-600 bg-red-50';
+        else if (rate >= 30) colorClass = 'text-yellow-600 bg-yellow-50';
+        return { text, colorClass };
+      }
+      case 'phase': {
+        const phase = activity.phase;
+        if (!phase) return { text: '-', colorClass: 'text-gray-400' };
+        // Color coding by phase number (1-6)
+        const phaseColors: Record<number, string> = {
+          1: 'text-blue-600 bg-blue-50',
+          2: 'text-cyan-600 bg-cyan-50',
+          3: 'text-green-600 bg-green-50',
+          4: 'text-yellow-600 bg-yellow-50',
+          5: 'text-orange-600 bg-orange-50',
+          6: 'text-red-600 bg-red-50',
+        };
+        return { text: `Phase ${phase}`, colorClass: phaseColors[phase] || 'text-purple-600 bg-purple-50' };
+      }
+      default: // 'grid'
+        return { text: activity.grid_location || '-', colorClass: 'text-gray-500' };
+    }
+  };
+
+  const displayValue = getDisplayValue();
 
   const getStatusColor = () => {
     switch (activity.status) {
@@ -60,8 +128,8 @@ export default function ActivityNode({ data }: ActivityNodeProps) {
         {activity.activity_name || 'Unnamed'}
       </div>
 
-      <div className="text-[10px] text-gray-500 text-center mt-1">
-        {activity.grid_location}
+      <div className={`text-[10px] text-center mt-1 px-1 rounded ${displayValue.colorClass}`}>
+        {displayValue.text}
       </div>
 
       <Handle type="source" position={Position.Right} className="w-2 h-2" />

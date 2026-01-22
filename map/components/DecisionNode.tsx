@@ -1,17 +1,81 @@
 'use client';
 
 import { Handle, Position } from '@xyflow/react';
-import { Activity } from '@/lib/types';
+import { Activity, calculateActivityCosts } from '@/lib/types';
+import type { DisplayMode } from '@/app/page';
 
 interface DecisionNodeProps {
   data: {
     activity: Activity;
     onClick: (activity: Activity) => void;
+    displayMode?: DisplayMode;
   };
 }
 
 export default function DecisionNode({ data }: DecisionNodeProps) {
-  const { activity, onClick } = data;
+  const { activity, onClick, displayMode = 'grid' } = data;
+
+  // Get effective values
+  const getEffectiveTaskTime = (): number | null => {
+    if (activity.task_time_custom != null) return activity.task_time_custom;
+    return activity.task_time_midpoint || null;
+  };
+
+  const getEffectiveLaborRate = (): number | null => {
+    if (activity.labor_rate_custom != null) return activity.labor_rate_custom;
+    return activity.labor_rate_midpoint || null;
+  };
+
+  // Format display value based on mode
+  const getDisplayValue = (): { text: string; colorClass: string } => {
+    switch (displayMode) {
+      case 'cost': {
+        const costs = calculateActivityCosts(activity);
+        if (!costs) return { text: '-', colorClass: 'text-gray-400' };
+        const annual = costs.annual_cost;
+        const text = annual >= 1000 ? `$${Math.round(annual / 1000)}k` : `$${Math.round(annual)}`;
+        let colorClass = 'text-green-600';
+        if (annual >= 50000) colorClass = 'text-red-600';
+        else if (annual >= 10000) colorClass = 'text-yellow-600';
+        return { text, colorClass };
+      }
+      case 'time': {
+        const time = getEffectiveTaskTime();
+        if (!time) return { text: '-', colorClass: 'text-gray-400' };
+        const text = `${time.toFixed(1)} min`;
+        let colorClass = 'text-green-600';
+        if (time > 15) colorClass = 'text-red-600';
+        else if (time >= 5) colorClass = 'text-yellow-600';
+        return { text, colorClass };
+      }
+      case 'rate': {
+        const rate = getEffectiveLaborRate();
+        if (!rate) return { text: '-', colorClass: 'text-gray-400' };
+        const text = `$${Math.round(rate)}/hr`;
+        let colorClass = 'text-green-600';
+        if (rate > 60) colorClass = 'text-red-600';
+        else if (rate >= 30) colorClass = 'text-yellow-600';
+        return { text, colorClass };
+      }
+      case 'phase': {
+        const phase = activity.phase;
+        if (!phase) return { text: '-', colorClass: 'text-gray-400' };
+        const phaseColors: Record<number, string> = {
+          1: 'text-blue-600',
+          2: 'text-cyan-600',
+          3: 'text-green-600',
+          4: 'text-yellow-600',
+          5: 'text-orange-600',
+          6: 'text-red-600',
+        };
+        return { text: `P${phase}`, colorClass: phaseColors[phase] || 'text-purple-600' };
+      }
+      default:
+        return { text: activity.grid_location || '-', colorClass: 'text-gray-500' };
+    }
+  };
+
+  const displayValue = getDisplayValue();
 
   const getStatusColor = () => {
     switch (activity.status) {
@@ -74,8 +138,8 @@ export default function DecisionNode({ data }: DecisionNodeProps) {
           <div className="text-xs font-medium text-gray-800 leading-tight">
             {activity.activity_name || 'Unnamed'}
           </div>
-          <div className="text-[9px] text-gray-500 mt-0.5">
-            {activity.grid_location}
+          <div className={`text-[9px] mt-0.5 ${displayValue.colorClass}`}>
+            {displayValue.text}
           </div>
         </div>
       </div>
