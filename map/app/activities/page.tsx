@@ -6,7 +6,7 @@ import { Activity } from '@/lib/types';
 import { useSettings } from '@/lib/SettingsContext';
 import { useWorkflow } from '@/lib/WorkflowContext';
 
-type SortColumn = 'id' | 'name' | 'type' | 'swimlane' | 'phase' | 'status' | 'plan' | 'monthly_cost' | 'annual_cost';
+type SortColumn = 'id' | 'name' | 'type' | 'swimlane' | 'task_time' | 'volume' | 'labor_rate' | 'monthly_cost' | 'annual_cost' | 'plan' | 'status';
 type SortDirection = 'asc' | 'desc';
 
 export default function ActivitiesPage() {
@@ -18,28 +18,33 @@ export default function ActivitiesPage() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('id');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
+  // Get effective values for display
+  const getEffectiveTaskTime = (activity: Activity): number | null => {
+    if (activity.task_time_custom != null) {
+      return activity.task_time_custom;
+    }
+    return activity.task_time_midpoint || null;
+  };
+
+  const getEffectiveLaborRate = (activity: Activity): number | null => {
+    if (activity.labor_rate_custom != null) {
+      return activity.labor_rate_custom;
+    }
+    return activity.labor_rate_midpoint || null;
+  };
+
+  const getEffectiveVolume = (activity: Activity): number | null => {
+    if (activity.volume_custom != null) {
+      return activity.volume_custom;
+    }
+    return activity.volume_midpoint || null;
+  };
+
   // Calculate costs using dynamic settings
   const calculateCosts = (activity: Activity) => {
-    let taskTime: number | null = null;
-    if (activity.task_time_size === 'Other' && activity.task_time_custom) {
-      taskTime = activity.task_time_custom;
-    } else if (activity.task_time_midpoint) {
-      taskTime = activity.task_time_midpoint;
-    }
-
-    let laborRate: number | null = null;
-    if (activity.labor_rate_size === 'Other' && activity.labor_rate_custom) {
-      laborRate = activity.labor_rate_custom;
-    } else if (activity.labor_rate_midpoint) {
-      laborRate = activity.labor_rate_midpoint;
-    }
-
-    let volume: number | null = null;
-    if (activity.volume_size === 'Other' && activity.volume_custom) {
-      volume = activity.volume_custom;
-    } else if (activity.volume_midpoint) {
-      volume = activity.volume_midpoint;
-    }
+    const taskTime = getEffectiveTaskTime(activity);
+    const laborRate = getEffectiveLaborRate(activity);
+    const volume = getEffectiveVolume(activity);
 
     if (taskTime && laborRate && volume && taskTime > 0) {
       const effectiveTaskTime = taskTime / settings.productivity_factor;
@@ -136,6 +141,14 @@ export default function ActivitiesPage() {
     }).format(value);
   };
 
+  const formatNumber = (value: number | null, decimals: number = 0) => {
+    if (value === null) return '-';
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value);
+  };
+
   // Handle column header click for sorting
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -169,17 +182,17 @@ export default function ActivitiesPage() {
           aVal = a.grid_location?.match(/^[A-Z]/)?.[0] || 'ZZZ';
           bVal = b.grid_location?.match(/^[A-Z]/)?.[0] || 'ZZZ';
           break;
-        case 'phase':
-          aVal = parseInt(a.grid_location?.match(/\d+/)?.[0] || '9999', 10);
-          bVal = parseInt(b.grid_location?.match(/\d+/)?.[0] || '9999', 10);
+        case 'task_time':
+          aVal = getEffectiveTaskTime(a) ?? -1;
+          bVal = getEffectiveTaskTime(b) ?? -1;
           break;
-        case 'status':
-          aVal = a.status || '';
-          bVal = b.status || '';
+        case 'volume':
+          aVal = getEffectiveVolume(a) ?? -1;
+          bVal = getEffectiveVolume(b) ?? -1;
           break;
-        case 'plan':
-          aVal = a.transformation_plan || 'zzz';
-          bVal = b.transformation_plan || 'zzz';
+        case 'labor_rate':
+          aVal = getEffectiveLaborRate(a) ?? -1;
+          bVal = getEffectiveLaborRate(b) ?? -1;
           break;
         case 'monthly_cost':
           const aCosts = calculateCosts(a);
@@ -192,6 +205,14 @@ export default function ActivitiesPage() {
           const bAnnual = calculateCosts(b);
           aVal = aAnnual?.annual_cost ?? -1;
           bVal = bAnnual?.annual_cost ?? -1;
+          break;
+        case 'plan':
+          aVal = a.transformation_plan || 'zzz';
+          bVal = b.transformation_plan || 'zzz';
+          break;
+        case 'status':
+          aVal = a.status || '';
+          bVal = b.status || '';
           break;
       }
 
@@ -213,7 +234,7 @@ export default function ActivitiesPage() {
   const SortableHeader = ({ column, label, align = 'left' }: { column: SortColumn; label: string; align?: 'left' | 'right' | 'center' }) => (
     <th
       onClick={() => handleSort(column)}
-      className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none ${
+      className={`px-3 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none ${
         align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
       }`}
     >
@@ -320,12 +341,14 @@ export default function ActivitiesPage() {
                     <SortableHeader column="name" label="Name" />
                     <SortableHeader column="type" label="Type" />
                     <SortableHeader column="swimlane" label="Swimlane" />
-                    <SortableHeader column="phase" label="Phase" />
-                    <SortableHeader column="plan" label="Plan" />
-                    <SortableHeader column="status" label="Status" />
+                    <SortableHeader column="task_time" label="Avg Time" align="right" />
+                    <SortableHeader column="volume" label="Volume/Mo" align="right" />
+                    <SortableHeader column="labor_rate" label="Labor Rate" align="right" />
                     <SortableHeader column="monthly_cost" label="Monthly Cost" align="right" />
                     <SortableHeader column="annual_cost" label="Annual Cost" align="right" />
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <SortableHeader column="plan" label="Plan" />
+                    <SortableHeader column="status" label="Status" />
+                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -333,43 +356,50 @@ export default function ActivitiesPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedActivities.map((activity) => {
                     const costs = calculateCosts(activity);
+                    const taskTime = getEffectiveTaskTime(activity);
+                    const volume = getEffectiveVolume(activity);
+                    const laborRate = getEffectiveLaborRate(activity);
                     const stepNumber = activity.grid_location?.match(/\d+/)?.[0];
                     const isUnassigned = !stepNumber;
 
                     return (
                       <tr key={activity.id} className={`hover:bg-gray-50 ${isUnassigned ? 'bg-yellow-50' : ''}`}>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                           {activity.id}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {activity.activity_name || '-'}
+                        <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          <Link href={`/activities/${activity.id}`} className="hover:text-blue-600">
+                            {activity.activity_name || '-'}
+                          </Link>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 capitalize">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 capitalize">
                           {activity.activity_type}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
                           {getSwimlaneName(activity.grid_location)}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          {isUnassigned ? (
-                            <span className="text-yellow-600 italic">Unassigned</span>
-                          ) : (
-                            stepNumber
-                          )}
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+                          {taskTime ? `${formatNumber(taskTime, 1)} min` : '-'}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm">
-                          <PlanBadge plan={activity.transformation_plan} />
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+                          {volume ? formatNumber(volume) : '-'}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm">
-                          <StatusBadge status={activity.status} />
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
+                          {laborRate ? `$${formatNumber(laborRate)}/hr` : '-'}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
                           {costs ? formatCurrency(costs.monthly_cost) : '-'}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
                           {costs ? formatCurrency(costs.annual_cost) : '-'}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
+                        <td className="px-3 py-3 whitespace-nowrap text-sm">
+                          <PlanBadge plan={activity.transformation_plan} />
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-sm">
+                          <StatusBadge status={activity.status} />
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-center">
                           <Link
                             href={`/activities/${activity.id}`}
                             className="link-primary mr-3"
@@ -389,16 +419,16 @@ export default function ActivitiesPage() {
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={7} className="px-4 py-3 text-sm font-bold text-gray-900">
-                      TOTAL
+                    <td colSpan={7} className="px-3 py-3 text-sm font-bold text-gray-900">
+                      TOTAL ({activities.length} activities)
                     </td>
-                    <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                    <td className="px-3 py-3 text-sm font-bold text-gray-900 text-right">
                       {formatCurrency(totalMonthly)}
                     </td>
-                    <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                    <td className="px-3 py-3 text-sm font-bold text-gray-900 text-right">
                       {formatCurrency(totalAnnual)}
                     </td>
-                    <td></td>
+                    <td colSpan={3}></td>
                   </tr>
                 </tfoot>
               </table>

@@ -89,6 +89,14 @@ const brandColors = {
 - Root cause: Form initialized size as empty when activity had custom value but no size, so "Other" wasn't selected and custom input didn't show
 - Fix: Added `getInitialSize()` helper in ActivityForm.tsx that detects custom values and sets size to "Other" automatically
 
+#### Updated Activities Page Columns
+- New column order: ID, Name, Type, Swimlane, Avg Time, Volume/Mo, Labor Rate, Monthly Cost, Annual Cost, Plan, Status, Actions
+- Added new columns: Avg Time (minutes), Volume/Mo, Labor Rate ($/hr)
+- Removed Phase column
+- Activity name now links directly to edit page
+- All numeric columns are sortable
+- Footer shows activity count
+
 ---
 
 ## Known Issues / TODOs
