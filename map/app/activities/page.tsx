@@ -6,7 +6,7 @@ import { Activity } from '@/lib/types';
 import { useSettings } from '@/lib/SettingsContext';
 import { useWorkflow } from '@/lib/WorkflowContext';
 
-type SortColumn = 'id' | 'name' | 'type' | 'swimlane' | 'task_time' | 'volume' | 'labor_rate' | 'monthly_cost' | 'annual_cost' | 'plan' | 'status';
+type SortColumn = 'id' | 'name' | 'type' | 'swimlane' | 'task_time' | 'volume' | 'labor_rate' | 'monthly_cost' | 'annual_cost' | 'plan' | 'status' | 'phase';
 type SortDirection = 'asc' | 'desc';
 
 export default function ActivitiesPage() {
@@ -214,6 +214,10 @@ export default function ActivitiesPage() {
           aVal = a.status || '';
           bVal = b.status || '';
           break;
+        case 'phase':
+          aVal = a.phase ?? 999;
+          bVal = b.phase ?? 999;
+          break;
       }
 
       if (aVal === null || aVal === undefined) aVal = '';
@@ -348,6 +352,7 @@ export default function ActivitiesPage() {
                     <SortableHeader column="annual_cost" label="Annual Cost" align="right" />
                     <SortableHeader column="plan" label="Plan" />
                     <SortableHeader column="status" label="Status" />
+                    <SortableHeader column="phase" label="Phase" align="center" />
                     <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
@@ -399,6 +404,9 @@ export default function ActivitiesPage() {
                         <td className="px-3 py-3 whitespace-nowrap text-sm">
                           <StatusBadge status={activity.status} />
                         </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-sm text-center text-gray-500">
+                          {activity.phase ?? '-'}
+                        </td>
                         <td className="px-3 py-3 whitespace-nowrap text-sm text-center">
                           <Link
                             href={`/activities/${activity.id}`}
@@ -428,7 +436,7 @@ export default function ActivitiesPage() {
                     <td className="px-3 py-3 text-sm font-bold text-gray-900 text-right">
                       {formatCurrency(totalAnnual)}
                     </td>
-                    <td colSpan={3}></td>
+                    <td colSpan={4}></td>
                   </tr>
                 </tfoot>
               </table>
