@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Process Transformation - Voyage Consultant Tools",
+  title: "Voyage Process Transformation",
   description: "Visual process mapping for workflow analysis",
 };
 
