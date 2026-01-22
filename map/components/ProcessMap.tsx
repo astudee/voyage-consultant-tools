@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   Node,
@@ -255,6 +255,11 @@ export default function ProcessMap({ activities, swimlanes, onPositionUpdate, di
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // Update nodes when displayMode or activities change
+  useEffect(() => {
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
 
   // Convert screen position to grid location
   const positionToGridLocation = (x: number, y: number): string | null => {

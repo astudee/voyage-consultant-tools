@@ -63,16 +63,17 @@ export default function ActivityNode({ data }: ActivityNodeProps) {
       case 'phase': {
         const phase = activity.phase;
         if (!phase) return { text: '-', colorClass: 'text-gray-400' };
-        // Color coding by phase number (1-6)
-        const phaseColors: Record<number, string> = {
-          1: 'text-blue-600 bg-blue-50',
-          2: 'text-cyan-600 bg-cyan-50',
-          3: 'text-green-600 bg-green-50',
-          4: 'text-yellow-600 bg-yellow-50',
-          5: 'text-orange-600 bg-orange-50',
-          6: 'text-red-600 bg-red-50',
-        };
-        return { text: `Phase ${phase}`, colorClass: phaseColors[phase] || 'text-purple-600 bg-purple-50' };
+        // Color coding by phase number (1-6, rotating for higher phases)
+        const phaseColors = [
+          'text-blue-600 bg-blue-50',    // 1
+          'text-cyan-600 bg-cyan-50',    // 2
+          'text-green-600 bg-green-50',  // 3
+          'text-yellow-600 bg-yellow-50', // 4
+          'text-orange-600 bg-orange-50', // 5
+          'text-pink-600 bg-pink-50',    // 6
+        ];
+        const colorIndex = ((phase - 1) % 6);
+        return { text: `Phase ${phase}`, colorClass: phaseColors[colorIndex] };
       }
       default: // 'grid'
         return { text: activity.grid_location || '-', colorClass: 'text-gray-500' };

@@ -60,15 +60,17 @@ export default function DecisionNode({ data }: DecisionNodeProps) {
       case 'phase': {
         const phase = activity.phase;
         if (!phase) return { text: '-', colorClass: 'text-gray-400' };
-        const phaseColors: Record<number, string> = {
-          1: 'text-blue-600',
-          2: 'text-cyan-600',
-          3: 'text-green-600',
-          4: 'text-yellow-600',
-          5: 'text-orange-600',
-          6: 'text-red-600',
-        };
-        return { text: `P${phase}`, colorClass: phaseColors[phase] || 'text-purple-600' };
+        // Color coding by phase number (1-6, rotating for higher phases)
+        const phaseColors = [
+          'text-blue-600',    // 1
+          'text-cyan-600',    // 2
+          'text-green-600',   // 3
+          'text-yellow-600',  // 4
+          'text-orange-600',  // 5
+          'text-pink-600',    // 6
+        ];
+        const colorIndex = ((phase - 1) % 6);
+        return { text: `P${phase}`, colorClass: phaseColors[colorIndex] };
       }
       default:
         return { text: activity.grid_location || '-', colorClass: 'text-gray-500' };
