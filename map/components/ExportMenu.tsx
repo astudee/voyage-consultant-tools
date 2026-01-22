@@ -7,7 +7,6 @@ import jsPDF from 'jspdf';
 interface ExportMenuProps {
   workflowName: string;
   mapContainerRef: React.RefObject<HTMLDivElement | null>;
-  onBeforeExport?: () => Promise<void>;
 }
 
 type ExportSize = 'standard' | 'large' | 'plotter';
@@ -18,7 +17,7 @@ const sizeConfigs: Record<ExportSize, { label: string; scale: number; descriptio
   plotter: { label: 'Plotter', scale: 4, description: 'Large format printing' },
 };
 
-export default function ExportMenu({ workflowName, mapContainerRef, onBeforeExport }: ExportMenuProps) {
+export default function ExportMenu({ workflowName, mapContainerRef }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedSize, setSelectedSize] = useState<ExportSize>('standard');
@@ -110,11 +109,6 @@ export default function ExportMenu({ workflowName, mapContainerRef, onBeforeExpo
     if (!mapContainerRef.current) {
       console.error('Map container ref not found');
       return null;
-    }
-
-    // Fit view to show all nodes before capturing
-    if (onBeforeExport) {
-      await onBeforeExport();
     }
 
     // Hide controls during capture
