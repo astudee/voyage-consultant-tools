@@ -116,6 +116,21 @@ export default function ActivityNode({ data }: ActivityNodeProps) {
     );
   };
 
+  const getOpportunityFlag = () => {
+    if (!activity.opportunities) return null;
+    return (
+      <span className="absolute -bottom-2 -left-2" title="Has opportunity">
+        <svg
+          className="w-4 h-4 text-red-500"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M5 21V4h9l.4 2H20v10h-7l-.4-2H7v7H5z" />
+        </svg>
+      </span>
+    );
+  };
+
   return (
     <div
       className={`relative px-4 py-2 rounded-lg border-2 shadow-sm cursor-pointer hover:shadow-md transition-shadow min-w-[120px] ${getStatusColor()}`}
@@ -124,6 +139,7 @@ export default function ActivityNode({ data }: ActivityNodeProps) {
       <Handle type="target" position={Position.Left} className="w-2 h-2" />
 
       {getPlanBadge()}
+      {getOpportunityFlag()}
 
       <div className="text-sm font-medium text-gray-800 text-center">
         {activity.activity_name || 'Unnamed'}
