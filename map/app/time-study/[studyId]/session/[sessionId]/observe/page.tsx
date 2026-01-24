@@ -12,8 +12,10 @@ import type {
   TimeStudyOutcome,
   TimeStudyObservation,
 } from '@/lib/time-study-types';
-import { formatDuration } from '@/lib/time-study-types';
+import { formatDuration, formatDurationPrecise } from '@/lib/time-study-types';
 import CodingModal from './components/CodingModal';
+import EditObservationModal from './components/EditObservationModal';
+import EndSessionModal from './components/EndSessionModal';
 
 interface StudyData {
   study: TimeStudy;
@@ -62,12 +64,17 @@ export default function ObservationPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Activity selection (for simple timer)
+  const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
+
   // Step tracking (for phases/segments)
   const [activeStep, setActiveStep] = useState<ActiveStep | null>(null);
   const [recordedSteps, setRecordedSteps] = useState<RecordedStep[]>([]);
 
-  // Coding modal state
+  // Modal states
   const [showCodingModal, setShowCodingModal] = useState(false);
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
+  const [editingObservation, setEditingObservation] = useState<TimeStudyObservation | null>(null);
   const [savingObservation, setSavingObservation] = useState(false);
 
   // Fetch study and session data
@@ -81,6 +88,13 @@ export default function ObservationPage() {
         if (session.error) throw new Error(session.error);
         setStudyData(study);
         setSessionData(session);
+
+        // Auto-select activity if only one
+        const activeActivities = study.activities.filter((a: TimeStudyActivity) => a.is_active);
+        if (activeActivities.length === 1) {
+          setSelectedActivityId(activeActivities[0].id);
+        }
+
         setLoading(false);
       })
       .catch((err) => {
@@ -89,13 +103,13 @@ export default function ObservationPage() {
       });
   }, [studyId, sessionId]);
 
-  // Timer effect
+  // Timer effect - update every 100ms for smooth display
   useEffect(() => {
     if (isTimerRunning && timerStartedAt) {
       timerRef.current = setInterval(() => {
         const startTime = new Date(timerStartedAt).getTime();
         const now = Date.now();
-        setElapsedSeconds(Math.floor((now - startTime) / 1000));
+        setElapsedSeconds((now - startTime) / 1000);
       }, 100);
     } else {
       if (timerRef.current) {
@@ -130,7 +144,69 @@ export default function ObservationPage() {
     }
   }, [studyData]);
 
-  const stopTimer = useCallback(() => {
+  // Quick log for simple timer - tap outcome = log + restart
+  const handleQuickLog = useCallback(
+    async (outcomeId: number) => {
+      if (!timerStartedAt || !studyData || !sessionData) return;
+
+      setSavingObservation(true);
+      setError(null);
+
+      try {
+        const endedAt = new Date().toISOString();
+        const observationNumber = (sessionData.observations?.length || 0) + 1;
+        const totalDurationSeconds = Math.floor(elapsedSeconds);
+
+        const response = await fetch(`/api/time-study/sessions/${sessionId}/observations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            study_activity_id: selectedActivityId,
+            adhoc_activity_name: null,
+            observation_number: observationNumber,
+            started_at: timerStartedAt,
+            ended_at: endedAt,
+            total_duration_seconds: totalDurationSeconds,
+            outcome_id: outcomeId,
+            notes: null,
+            opportunity: null,
+            flag_ids: [],
+            steps: [],
+          }),
+        });
+
+        const result = await response.json();
+        if (result.error) throw new Error(result.error);
+
+        // Refresh session data
+        const sessionRes = await fetch(`/api/time-study/sessions/${sessionId}`);
+        const newSessionData = await sessionRes.json();
+        setSessionData(newSessionData);
+
+        // Restart timer immediately
+        const now = new Date().toISOString();
+        setTimerStartedAt(now);
+        setElapsedSeconds(0);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to save observation');
+      } finally {
+        setSavingObservation(false);
+      }
+    },
+    [timerStartedAt, studyData, sessionData, sessionId, selectedActivityId, elapsedSeconds]
+  );
+
+  // Discard - reset timer without logging
+  const handleDiscard = useCallback(() => {
+    const now = new Date().toISOString();
+    setTimerStartedAt(now);
+    setElapsedSeconds(0);
+    setRecordedSteps([]);
+    setActiveStep(null);
+  }, []);
+
+  // Stop timer for phases/segments (opens modal)
+  const stopTimerForCoding = useCallback(() => {
     const now = new Date().toISOString();
 
     // If there's an active step, close it
@@ -198,6 +274,7 @@ export default function ObservationPage() {
     [isTimerRunning, activeStep, recordedSteps]
   );
 
+  // Save observation from CodingModal (phases/segments)
   const handleSaveObservation = async (data: {
     activityId: number | null;
     adhocActivityName: string | null;
@@ -206,15 +283,15 @@ export default function ObservationPage() {
     notes: string;
     opportunity: string;
   }) => {
-    if (!timerStartedAt) return;
+    if (!timerStartedAt || !sessionData) return;
 
     setSavingObservation(true);
     setError(null);
 
     try {
       const endedAt = new Date().toISOString();
-      const observationNumber = (sessionData?.observations?.length || 0) + 1;
-      const totalDurationSeconds = elapsedSeconds;
+      const observationNumber = (sessionData.observations?.length || 0) + 1;
+      const totalDurationSeconds = Math.floor(elapsedSeconds);
 
       const response = await fetch(`/api/time-study/sessions/${sessionId}/observations`, {
         method: 'POST',
@@ -244,7 +321,7 @@ export default function ObservationPage() {
       const result = await response.json();
       if (result.error) throw new Error(result.error);
 
-      // Refresh session data to show new observation
+      // Refresh session data
       const sessionRes = await fetch(`/api/time-study/sessions/${sessionId}`);
       const newSessionData = await sessionRes.json();
       setSessionData(newSessionData);
@@ -261,7 +338,7 @@ export default function ObservationPage() {
     }
   };
 
-  const handleCancelObservation = () => {
+  const handleCancelCodingModal = () => {
     setShowCodingModal(false);
     setTimerStartedAt(null);
     setElapsedSeconds(0);
@@ -269,15 +346,18 @@ export default function ObservationPage() {
     setActiveStep(null);
   };
 
-  const handleEndSession = async () => {
-    if (
-      !confirm(
-        'Are you sure you want to end this session? Make sure you have saved all observations.'
-      )
-    ) {
-      return;
+  // End session flow
+  const handleEndSessionClick = () => {
+    if (isTimerRunning && timerStartedAt) {
+      // Timer is running - show modal for final observation
+      setShowEndSessionModal(true);
+    } else {
+      // Timer not running - just end session
+      endSessionDirectly();
     }
+  };
 
+  const endSessionDirectly = async () => {
     try {
       await fetch(`/api/time-study/sessions/${sessionId}`, {
         method: 'PUT',
@@ -287,12 +367,108 @@ export default function ObservationPage() {
           ended_at: new Date().toISOString(),
         }),
       });
-
       router.push(`/time-study/${studyId}/summary`);
     } catch (err) {
       setError('Failed to end session');
     }
   };
+
+  const handleEndSessionWithOutcome = async (outcomeId: number | null) => {
+    if (!timerStartedAt || !sessionData) {
+      await endSessionDirectly();
+      return;
+    }
+
+    setSavingObservation(true);
+
+    try {
+      // Log final observation if outcome selected
+      if (outcomeId !== null) {
+        const endedAt = new Date().toISOString();
+        const observationNumber = (sessionData.observations?.length || 0) + 1;
+        const totalDurationSeconds = Math.floor(elapsedSeconds);
+
+        await fetch(`/api/time-study/sessions/${sessionId}/observations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            study_activity_id: selectedActivityId,
+            adhoc_activity_name: null,
+            observation_number: observationNumber,
+            started_at: timerStartedAt,
+            ended_at: endedAt,
+            total_duration_seconds: totalDurationSeconds,
+            outcome_id: outcomeId,
+            notes: null,
+            opportunity: null,
+            flag_ids: [],
+            steps: [],
+          }),
+        });
+      }
+
+      // End session
+      await endSessionDirectly();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save final observation');
+      setSavingObservation(false);
+    }
+  };
+
+  // Edit observation
+  const handleEditObservation = (obs: TimeStudyObservation) => {
+    setEditingObservation(obs);
+  };
+
+  const handleSaveEditedObservation = async (data: {
+    activityId: number | null;
+    adhocActivityName: string | null;
+    outcomeId: number | null;
+    flagIds: number[];
+    notes: string;
+    opportunity: string;
+  }) => {
+    if (!editingObservation) return;
+
+    setSavingObservation(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/time-study/observations/${editingObservation.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          study_activity_id: data.activityId,
+          adhoc_activity_name: data.adhocActivityName,
+          outcome_id: data.outcomeId,
+          notes: data.notes || null,
+          opportunity: data.opportunity || null,
+          flag_ids: data.flagIds,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+
+      // Refresh session data
+      const sessionRes = await fetch(`/api/time-study/sessions/${sessionId}`);
+      const newSessionData = await sessionRes.json();
+      setSessionData(newSessionData);
+
+      setEditingObservation(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update observation');
+    } finally {
+      setSavingObservation(false);
+    }
+  };
+
+  // Calculate totals
+  const totalObservations = sessionData?.observations?.length || 0;
+  const totalDuration = sessionData?.observations?.reduce(
+    (sum, obs) => sum + (obs.total_duration_seconds || 0),
+    0
+  ) || 0;
 
   if (loading) {
     return (
@@ -320,205 +496,242 @@ export default function ObservationPage() {
 
   const { study, activities, steps, flags, outcomes } = studyData;
   const { session, observations } = sessionData;
+  const isSimpleTimer = study.structure_type === 'simple';
+  const activeActivities = activities.filter((a) => a.is_active);
 
   return (
     <div className="h-full flex flex-col bg-gray-900 text-white">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      {/* Header - minimal */}
+      <header className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <Link
             href={`/time-study/${studyId}/summary`}
             className="text-gray-400 hover:text-white"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
           </Link>
           <div>
-            <h1 className="text-lg font-semibold">{study.study_name}</h1>
-            <p className="text-xs text-gray-400">
-              Observer: {session.observer_name}
-              {session.observed_worker_name && ` | Worker: ${session.observed_worker_name}`}
+            <h1 className="text-sm font-semibold">{study.study_name}</h1>
+            <p className="text-xs text-gray-500">
+              {session.observer_name}
+              {session.observed_worker_name && ` → ${session.observed_worker_name}`}
             </p>
           </div>
         </div>
-        <button
-          onClick={handleEndSession}
-          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
-        >
-          End Session
-        </button>
+
+        {/* Activity selector for simple timer with multiple activities */}
+        {isSimpleTimer && activeActivities.length > 1 && (
+          <select
+            value={selectedActivityId || ''}
+            onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : null)}
+            className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white"
+          >
+            <option value="">Select activity</option>
+            {activeActivities.map((activity) => (
+              <option key={activity.id} value={activity.id}>
+                {activity.activity_name}
+              </option>
+            ))}
+          </select>
+        )}
       </header>
 
       {/* Error display */}
       {error && (
         <div className="bg-red-900/50 border-b border-red-700 px-4 py-2 text-red-300 text-sm flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
-            Dismiss
-          </button>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">×</button>
         </div>
       )}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Timer Section */}
-        <div className="flex-shrink-0 bg-gray-800 p-6">
-          <div className="max-w-4xl mx-auto">
+        <div className="flex-shrink-0 bg-gray-800 p-4">
+          <div className="max-w-md mx-auto text-center">
             {/* Timer Display */}
-            <div className="text-center mb-6">
-              <div
-                className={`font-mono text-6xl tracking-wider ${
-                  isTimerRunning ? 'text-green-400' : 'text-gray-500'
-                }`}
-              >
-                {formatDuration(elapsedSeconds)}
-              </div>
-              <p className="text-gray-500 text-sm mt-2">
-                Observation #{(observations?.length || 0) + 1}
-              </p>
+            <div
+              className={`font-mono text-5xl tracking-wider mb-4 ${
+                isTimerRunning ? 'text-green-400' : 'text-gray-500'
+              }`}
+            >
+              {formatDurationPrecise(elapsedSeconds)}
             </div>
 
-            {/* Timer Controls */}
-            <div className="flex justify-center gap-4">
-              {!isTimerRunning ? (
-                <button
-                  onClick={startTimer}
-                  className="flex items-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-lg font-semibold transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  Start
-                </button>
-              ) : (
-                <button
-                  onClick={stopTimer}
-                  className="flex items-center gap-2 px-8 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-lg font-semibold transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="6" y="6" width="12" height="12" />
-                  </svg>
-                  Stop
-                </button>
-              )}
-            </div>
+            {/* Simple Timer: Outcome buttons + Discard */}
+            {isSimpleTimer && (
+              <>
+                {!isTimerRunning ? (
+                  <button
+                    onClick={startTimer}
+                    className="w-full py-4 bg-green-600 hover:bg-green-500 rounded-lg text-xl font-semibold transition-colors mb-3"
+                  >
+                    ▶ Start
+                  </button>
+                ) : (
+                  <>
+                    {/* Outcome buttons */}
+                    <div className="flex flex-wrap gap-2 justify-center mb-3">
+                      {outcomes.map((outcome) => (
+                        <button
+                          key={outcome.id}
+                          onClick={() => handleQuickLog(outcome.id)}
+                          disabled={savingObservation || (!selectedActivityId && activeActivities.length > 1)}
+                          className={`px-6 py-3 rounded-lg text-lg font-semibold transition-colors disabled:opacity-50 ${
+                            outcome.outcome_name === 'Complete'
+                              ? 'bg-green-600 hover:bg-green-500'
+                              : outcome.outcome_name === 'Transferred'
+                              ? 'bg-yellow-600 hover:bg-yellow-500'
+                              : outcome.outcome_name === 'Pended'
+                              ? 'bg-orange-600 hover:bg-orange-500'
+                              : 'bg-blue-600 hover:bg-blue-500'
+                          }`}
+                        >
+                          {outcome.outcome_name}
+                        </button>
+                      ))}
+                    </div>
 
-            {/* Steps UI for phases/segments */}
-            {study.structure_type !== 'simple' && steps.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-gray-400 mb-3">
-                  {study.structure_type === 'phases' ? 'Phases' : 'Segments'}
-                </h3>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {steps.map((step) => {
-                    const isActive = activeStep?.stepId === step.id;
-                    const completedVisits = recordedSteps.filter((rs) => rs.stepId === step.id)
-                      .length;
+                    {/* Discard button */}
+                    <button
+                      onClick={handleDiscard}
+                      className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                    >
+                      ✕ Discard
+                    </button>
+                  </>
+                )}
+              </>
+            )}
 
-                    return (
-                      <button
-                        key={step.id}
-                        onClick={() => switchStep(step)}
-                        disabled={!isTimerRunning}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors relative ${
-                          isActive
-                            ? 'bg-blue-600 text-white'
-                            : isTimerRunning
-                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                            : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                        }`}
-                      >
-                        {step.step_name}
-                        {completedVisits > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
-                            {completedVisits}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+            {/* Phases/Segments: Start/Stop + Steps */}
+            {!isSimpleTimer && (
+              <>
+                <div className="flex justify-center gap-4 mb-4">
+                  {!isTimerRunning ? (
+                    <button
+                      onClick={startTimer}
+                      className="flex items-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-lg font-semibold transition-colors"
+                    >
+                      ▶ Start
+                    </button>
+                  ) : (
+                    <button
+                      onClick={stopTimerForCoding}
+                      className="flex items-center gap-2 px-8 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-lg font-semibold transition-colors"
+                    >
+                      ■ Stop & Code
+                    </button>
+                  )}
                 </div>
-              </div>
+
+                {/* Steps UI */}
+                {steps.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs text-gray-500 mb-2">
+                      {study.structure_type === 'phases' ? 'Phases' : 'Segments'}
+                    </p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {steps.map((step) => {
+                        const isActive = activeStep?.stepId === step.id;
+                        const completedVisits = recordedSteps.filter((rs) => rs.stepId === step.id).length;
+
+                        return (
+                          <button
+                            key={step.id}
+                            onClick={() => switchStep(step)}
+                            disabled={!isTimerRunning}
+                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors relative ${
+                              isActive
+                                ? 'bg-blue-600 text-white'
+                                : isTimerRunning
+                                ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+                                : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                            }`}
+                          >
+                            {step.step_name}
+                            {completedVisits > 0 && (
+                              <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                                {completedVisits}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
+        </div>
+
+        {/* Stats Bar */}
+        <div className="bg-gray-850 border-y border-gray-700 px-4 py-2 text-center text-sm text-gray-400">
+          {totalObservations} observation{totalObservations !== 1 ? 's' : ''} · {formatDuration(totalDuration)} total
         </div>
 
         {/* Observations List */}
-        <div className="flex-1 overflow-auto p-4">
-          <div className="max-w-4xl mx-auto">
-            <h2 className="text-lg font-semibold mb-4">
-              Observations ({observations?.length || 0})
-            </h2>
-
-            {!observations || observations.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">
-                No observations recorded yet. Click Start to begin timing.
+        <div className="flex-1 overflow-auto p-3">
+          <div className="max-w-md mx-auto space-y-2">
+            {(!observations || observations.length === 0) ? (
+              <p className="text-gray-500 text-center py-8 text-sm">
+                {isTimerRunning ? 'Tap an outcome when done' : 'Tap Start to begin'}
               </p>
             ) : (
-              <div className="space-y-3">
-                {observations.map((obs) => (
-                  <div
-                    key={obs.id}
-                    className="bg-gray-800 rounded-lg p-4 border border-gray-700"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400 text-sm">#{obs.observation_number}</span>
-                          <span className="font-medium">
-                            {obs.activity_name || obs.adhoc_activity_name || 'No activity'}
-                          </span>
-                          {obs.outcome_name && (
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded ${
-                                obs.outcome_name === 'Complete'
-                                  ? 'bg-green-900 text-green-300'
-                                  : obs.outcome_name === 'Transferred'
-                                  ? 'bg-yellow-900 text-yellow-300'
-                                  : 'bg-orange-900 text-orange-300'
-                              }`}
-                            >
-                              {obs.outcome_name}
-                            </span>
-                          )}
-                        </div>
-                        {obs.notes && (
-                          <p className="text-sm text-gray-400 mt-1">{obs.notes}</p>
-                        )}
-                        {obs.flags && obs.flags.length > 0 && (
-                          <div className="flex gap-1 mt-2">
-                            {obs.flags.map((flag) => (
-                              <span
-                                key={flag.id}
-                                className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded"
-                              >
-                                {flag.flag_name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono text-lg">
-                          {formatDuration(obs.total_duration_seconds)}
+              [...observations].reverse().map((obs) => (
+                <button
+                  key={obs.id}
+                  onClick={() => handleEditObservation(obs)}
+                  className="w-full bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-gray-600 transition-colors text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 text-sm">#{obs.observation_number}</span>
+                      <span className="font-mono">{formatDuration(obs.total_duration_seconds)}</span>
+                      {obs.outcome_name && (
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded ${
+                            obs.outcome_name === 'Complete'
+                              ? 'bg-green-900 text-green-300'
+                              : obs.outcome_name === 'Transferred'
+                              ? 'bg-yellow-900 text-yellow-300'
+                              : obs.outcome_name === 'Pended'
+                              ? 'bg-orange-900 text-orange-300'
+                              : 'bg-blue-900 text-blue-300'
+                          }`}
+                        >
+                          {obs.outcome_name}
                         </span>
-                      </div>
+                      )}
                     </div>
+                    {(obs.notes || obs.opportunity || (obs.flags && obs.flags.length > 0)) && (
+                      <span className="text-gray-500 text-xs">✎</span>
+                    )}
                   </div>
-                ))}
-              </div>
+                  {obs.activity_name && obs.activity_name !== activeActivities[0]?.activity_name && (
+                    <p className="text-xs text-gray-500 mt-1">{obs.activity_name}</p>
+                  )}
+                </button>
+              ))
             )}
           </div>
         </div>
+
+        {/* End Session Button */}
+        <div className="flex-shrink-0 p-3 border-t border-gray-700">
+          <button
+            onClick={handleEndSessionClick}
+            className="w-full max-w-md mx-auto block py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors"
+          >
+            ■ End Session
+          </button>
+        </div>
       </div>
 
-      {/* Coding Modal */}
+      {/* Coding Modal (for phases/segments) */}
       {showCodingModal && (
         <CodingModal
           activities={activities}
@@ -527,7 +740,31 @@ export default function ObservationPage() {
           elapsedSeconds={elapsedSeconds}
           recordedSteps={recordedSteps}
           onSave={handleSaveObservation}
-          onCancel={handleCancelObservation}
+          onCancel={handleCancelCodingModal}
+          isSaving={savingObservation}
+        />
+      )}
+
+      {/* Edit Observation Modal */}
+      {editingObservation && (
+        <EditObservationModal
+          observation={editingObservation}
+          activities={activities}
+          outcomes={outcomes}
+          flags={flags}
+          onSave={handleSaveEditedObservation}
+          onCancel={() => setEditingObservation(null)}
+          isSaving={savingObservation}
+        />
+      )}
+
+      {/* End Session Modal */}
+      {showEndSessionModal && (
+        <EndSessionModal
+          outcomes={outcomes}
+          elapsedSeconds={elapsedSeconds}
+          onSelectOutcome={handleEndSessionWithOutcome}
+          onCancel={() => setShowEndSessionModal(false)}
           isSaving={savingObservation}
         />
       )}
