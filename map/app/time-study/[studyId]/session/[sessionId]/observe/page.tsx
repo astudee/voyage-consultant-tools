@@ -81,6 +81,13 @@ export default function ObservationPage() {
   const lastClickTimeRef = useRef<number>(0);
   const DEBOUNCE_MS = 200; // Minimum time between clicks (reduced from 500ms)
 
+  // Inline annotation state (for quick logging)
+  const [activeFlags, setActiveFlags] = useState<number[]>([]);
+  const [pendingNote, setPendingNote] = useState('');
+  const [pendingOpportunity, setPendingOpportunity] = useState('');
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [showOpportunityInput, setShowOpportunityInput] = useState(false)
+
   // Fetch study and session data
   useEffect(() => {
     Promise.all([
@@ -179,6 +186,14 @@ export default function ObservationPage() {
       const outcome = studyData.outcomes.find((o) => o.id === outcomeId);
       const selectedActivity = studyData.activities.find((a) => a.id === selectedActivityId);
 
+      // Capture current annotations before resetting
+      const flagsToSave = [...activeFlags];
+      const noteToSave = pendingNote.trim() || null;
+      const opportunityToSave = pendingOpportunity.trim() || null;
+
+      // Get flag names for optimistic update display
+      const flagObjects = studyData.flags.filter(f => flagsToSave.includes(f.id));
+
       // OPTIMISTIC UPDATE: Add observation to list immediately
       const optimisticObservation: TimeStudyObservation = {
         id: -observationNumber, // Temporary negative ID
@@ -192,9 +207,10 @@ export default function ObservationPage() {
         total_duration_seconds: totalDurationSeconds,
         outcome_id: outcomeId,
         outcome_name: outcome?.outcome_name || null,
-        notes: null,
-        opportunity: null,
+        notes: noteToSave,
+        opportunity: opportunityToSave,
         created_at: endedAt,
+        flags: flagObjects,
       };
 
       setSessionData((prev) => prev ? {
@@ -206,6 +222,13 @@ export default function ObservationPage() {
       const restartTime = new Date().toISOString();
       setTimerStartedAt(restartTime);
       setElapsedSeconds(0);
+
+      // Clear annotations after logging
+      setActiveFlags([]);
+      setPendingNote('');
+      setPendingOpportunity('');
+      setShowNoteInput(false);
+      setShowOpportunityInput(false);
 
       // Now do the actual API call in background
       setSavingObservation(true);
@@ -220,9 +243,9 @@ export default function ObservationPage() {
           ended_at: endedAt,
           total_duration_seconds: totalDurationSeconds,
           outcome_id: outcomeId,
-          notes: null,
-          opportunity: null,
-          flag_ids: [],
+          notes: noteToSave,
+          opportunity: opportunityToSave,
+          flag_ids: flagsToSave,
           steps: [],
         };
 
@@ -670,6 +693,106 @@ export default function ObservationPage() {
                       ))}
                     </div>
 
+                    {/* Inline Flag Toggles */}
+                    {flags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-center mb-3">
+                        {flags.map((flag) => {
+                          const isActive = activeFlags.includes(flag.id);
+                          return (
+                            <button
+                              key={flag.id}
+                              onClick={() => {
+                                setActiveFlags(prev =>
+                                  isActive
+                                    ? prev.filter(id => id !== flag.id)
+                                    : [...prev, flag.id]
+                                );
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                isActive
+                                  ? 'bg-blue-600 text-white border-2 border-blue-400'
+                                  : 'bg-transparent text-gray-400 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
+                              }`}
+                            >
+                              {flag.flag_name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Quick Note & Opportunity Buttons */}
+                    <div className="flex justify-center gap-3 mb-3">
+                      <button
+                        onClick={() => setShowNoteInput(!showNoteInput)}
+                        className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                          pendingNote
+                            ? 'bg-gray-600 text-white'
+                            : showNoteInput
+                            ? 'bg-gray-700 text-gray-300'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                        }`}
+                      >
+                        {pendingNote ? '+ Note ●' : '+ Note'}
+                      </button>
+                      <button
+                        onClick={() => setShowOpportunityInput(!showOpportunityInput)}
+                        className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                          pendingOpportunity
+                            ? 'bg-purple-700 text-white'
+                            : showOpportunityInput
+                            ? 'bg-gray-700 text-gray-300'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                        }`}
+                      >
+                        {pendingOpportunity ? '! Opportunity ●' : '! Opportunity'}
+                      </button>
+                    </div>
+
+                    {/* Note Input */}
+                    {showNoteInput && (
+                      <div className="mb-3">
+                        <input
+                          type="text"
+                          value={pendingNote}
+                          onChange={(e) => setPendingNote(e.target.value)}
+                          placeholder="Add note for this observation..."
+                          className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setShowNoteInput(false);
+                            } else if (e.key === 'Escape') {
+                              setPendingNote('');
+                              setShowNoteInput(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Opportunity Input */}
+                    {showOpportunityInput && (
+                      <div className="mb-3">
+                        <input
+                          type="text"
+                          value={pendingOpportunity}
+                          onChange={(e) => setPendingOpportunity(e.target.value)}
+                          placeholder="Improvement opportunity..."
+                          className="w-full bg-gray-700 border border-purple-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setShowOpportunityInput(false);
+                            } else if (e.key === 'Escape') {
+                              setPendingOpportunity('');
+                              setShowOpportunityInput(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+
                     {/* Discard button */}
                     <button
                       onClick={handleDiscard}
@@ -755,10 +878,11 @@ export default function ObservationPage() {
               <>
                 {/* Table Header */}
                 <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-900">
-                  <div className="col-span-2">Ob</div>
-                  <div className="col-span-3">Time</div>
-                  <div className="col-span-3">Outcome</div>
-                  <div className="col-span-4">Activity</div>
+                  <div className="col-span-1">#</div>
+                  <div className="col-span-3">Activity</div>
+                  <div className="col-span-2">Duration</div>
+                  <div className="col-span-2">Outcome</div>
+                  <div className="col-span-4">Flags</div>
                 </div>
 
                 {/* Observation Rows */}
@@ -769,13 +893,21 @@ export default function ObservationPage() {
                       onClick={() => handleEditObservation(obs)}
                       className="w-full grid grid-cols-12 gap-1 px-3 py-2.5 hover:bg-gray-800 transition-colors text-left items-center"
                     >
-                      <div className="col-span-2 text-gray-400 text-sm">
-                        #{obs.observation_number}
+                      <div className="col-span-1 text-gray-500 text-sm font-mono">
+                        {obs.observation_number}
                       </div>
-                      <div className="col-span-3 font-mono text-sm">
+                      <div className="col-span-3 text-xs text-gray-300 truncate flex items-center gap-1">
+                        <span className="truncate">
+                          {obs.activity_name || obs.adhoc_activity_name || '—'}
+                        </span>
+                        {(obs.notes || obs.opportunity) && (
+                          <span className="text-gray-600 flex-shrink-0">✎</span>
+                        )}
+                      </div>
+                      <div className="col-span-2 font-mono text-sm text-gray-300">
                         {formatDuration(obs.total_duration_seconds)}
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-2">
                         {obs.outcome_name && (
                           <span
                             className={`text-xs px-1.5 py-0.5 rounded ${
@@ -792,13 +924,12 @@ export default function ObservationPage() {
                           </span>
                         )}
                       </div>
-                      <div className="col-span-4 text-xs text-gray-400 truncate flex items-center gap-1">
-                        <span className="truncate">
-                          {obs.activity_name || obs.adhoc_activity_name || '—'}
-                        </span>
-                        {(obs.notes || obs.opportunity || (obs.flags && obs.flags.length > 0)) && (
-                          <span className="text-gray-600 flex-shrink-0">✎</span>
-                        )}
+                      <div className="col-span-4 text-xs text-gray-400 truncate">
+                        {obs.flags && obs.flags.length > 0 ? (
+                          <span className="text-blue-400">
+                            {obs.flags.map(f => f.flag_name).join(', ')}
+                          </span>
+                        ) : null}
                       </div>
                     </button>
                   ))}
