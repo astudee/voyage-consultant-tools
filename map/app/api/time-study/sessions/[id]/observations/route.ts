@@ -30,11 +30,15 @@ export async function POST(
   try {
     const { id } = await params;
     const sessionId = parseInt(id, 10);
+    console.log(`[Observation POST] Creating observation for session ${sessionId}`);
+
     if (isNaN(sessionId)) {
+      console.log(`[Observation POST] Invalid session ID: ${id}`);
       return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
     }
 
     const body = await request.json();
+    console.log(`[Observation POST] Body:`, JSON.stringify(body));
     const {
       study_activity_id,
       adhoc_activity_name,
@@ -69,6 +73,7 @@ export async function POST(
       opportunity: opportunity || null,
       flag_ids: flag_ids || [],
     });
+    console.log(`[Observation POST] Created observation ${observationId}`);
 
     // Create observation steps if provided
     if (steps && Array.isArray(steps)) {

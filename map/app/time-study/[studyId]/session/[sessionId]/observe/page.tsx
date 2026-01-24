@@ -79,7 +79,7 @@ export default function ObservationPage() {
 
   // Debounce ref to prevent double-clicks
   const lastClickTimeRef = useRef<number>(0);
-  const DEBOUNCE_MS = 500; // Minimum time between clicks
+  const DEBOUNCE_MS = 200; // Minimum time between clicks (reduced from 500ms)
 
   // Fetch study and session data
   useEffect(() => {
@@ -149,6 +149,7 @@ export default function ObservationPage() {
   }, [studyData]);
 
   // Quick log for simple timer - tap outcome = log + restart
+  // Uses optimistic updates for snappy UX
   const handleQuickLog = useCallback(
     async (outcomeId: number) => {
       // Debounce - prevent double-clicks
@@ -170,14 +171,47 @@ export default function ObservationPage() {
         return;
       }
 
+      const endedAt = new Date().toISOString();
+      const observationNumber = (sessionData.observations?.length || 0) + 1;
+      const totalDurationSeconds = Math.floor(elapsedSeconds);
+
+      // Find outcome name for optimistic update
+      const outcome = studyData.outcomes.find((o) => o.id === outcomeId);
+      const selectedActivity = studyData.activities.find((a) => a.id === selectedActivityId);
+
+      // OPTIMISTIC UPDATE: Add observation to list immediately
+      const optimisticObservation: TimeStudyObservation = {
+        id: -observationNumber, // Temporary negative ID
+        session_id: parseInt(sessionId, 10),
+        study_activity_id: selectedActivityId,
+        activity_name: selectedActivity?.activity_name || null,
+        adhoc_activity_name: null,
+        observation_number: observationNumber,
+        started_at: timerStartedAt,
+        ended_at: endedAt,
+        total_duration_seconds: totalDurationSeconds,
+        outcome_id: outcomeId,
+        outcome_name: outcome?.outcome_name || null,
+        notes: null,
+        opportunity: null,
+        created_at: endedAt,
+      };
+
+      setSessionData((prev) => prev ? {
+        ...prev,
+        observations: [...(prev.observations || []), optimisticObservation],
+      } : prev);
+
+      // RESTART TIMER IMMEDIATELY for snappy UX
+      const restartTime = new Date().toISOString();
+      setTimerStartedAt(restartTime);
+      setElapsedSeconds(0);
+
+      // Now do the actual API call in background
       setSavingObservation(true);
       setError(null);
 
       try {
-        const endedAt = new Date().toISOString();
-        const observationNumber = (sessionData.observations?.length || 0) + 1;
-        const totalDurationSeconds = Math.floor(elapsedSeconds);
-
         const payload = {
           study_activity_id: selectedActivityId,
           adhoc_activity_name: null,
@@ -192,6 +226,7 @@ export default function ObservationPage() {
           steps: [],
         };
 
+        console.log('handleQuickLog: saving observation', observationNumber);
         const response = await fetch(`/api/time-study/sessions/${sessionId}/observations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -203,28 +238,31 @@ export default function ObservationPage() {
           console.error('API error:', result);
           throw new Error(result.error);
         }
+        console.log('handleQuickLog: observation saved, id:', result.id);
 
-        // Refresh session data
-        const sessionRes = await fetch(`/api/time-study/sessions/${sessionId}`);
-        if (!sessionRes.ok) {
-          console.error('Session refresh HTTP error:', sessionRes.status, sessionRes.statusText);
-          throw new Error(`Session refresh failed: ${sessionRes.status}`);
-        }
-        const newSessionData = await sessionRes.json();
-        if (newSessionData.error) {
-          console.error('Session refresh error:', newSessionData);
-          throw new Error(newSessionData.error + (newSessionData.details ? `: ${newSessionData.details}` : ''));
-        }
-        setSessionData(newSessionData);
-        console.log('Session refreshed, observations:', newSessionData.observations?.length || 0);
+        // Refresh session data to get real IDs (do this in background, don't block UX)
+        fetch(`/api/time-study/sessions/${sessionId}`)
+          .then((res) => res.json())
+          .then((newSessionData) => {
+            if (!newSessionData.error) {
+              setSessionData(newSessionData);
+              console.log('Session refreshed, observations:', newSessionData.observations?.length || 0);
+            } else {
+              console.error('Session refresh error:', newSessionData);
+            }
+          })
+          .catch((err) => {
+            console.error('Session refresh failed:', err);
+          });
 
-        // Restart timer immediately
-        const now = new Date().toISOString();
-        setTimerStartedAt(now);
-        setElapsedSeconds(0);
       } catch (err) {
         console.error('handleQuickLog error:', err);
         setError(err instanceof Error ? err.message : 'Failed to save observation');
+        // Revert optimistic update on error
+        setSessionData((prev) => prev ? {
+          ...prev,
+          observations: (prev.observations || []).filter((o) => o.id !== optimisticObservation.id),
+        } : prev);
       } finally {
         setSavingObservation(false);
       }

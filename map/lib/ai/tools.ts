@@ -1,6 +1,19 @@
 // AI Tool Registry and Executors
 
 import { ToolDefinition } from './types';
+import {
+  getWorkflows,
+  createWorkflow,
+  updateWorkflow,
+  deleteWorkflow,
+  getActivities,
+  createActivity,
+  updateActivity,
+  deleteActivity,
+  getSwimlaneConfig,
+  saveSwimlaneConfig,
+  getTshirtConfig,
+} from '../snowflake';
 
 // Tool definitions for AI providers
 export const toolDefinitions: ToolDefinition[] = [
@@ -301,180 +314,118 @@ export const toolDefinitions: ToolDefinition[] = [
   },
 ];
 
-// Base URL for internal API calls
-function getBaseUrl(): string {
-  // In server context, we need to construct the URL
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  return process.env.NEXTAUTH_URL || 'http://localhost:3000';
-}
-
-// Tool executor functions
+// Tool executor functions - calls Snowflake directly (no HTTP requests)
 export async function executeTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
-  const baseUrl = getBaseUrl();
-
   try {
     switch (name) {
       // Workflow Tools
       case 'list_workflows': {
-        const res = await fetch(`${baseUrl}/api/workflows`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to list workflows');
-        return { success: true, data: data.workflows };
+        const workflows = await getWorkflows();
+        return { success: true, data: workflows };
       }
 
       case 'create_workflow': {
-        const res = await fetch(`${baseUrl}/api/workflows`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: args.name,
-            description: args.description,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to create workflow');
-        return { success: true, data: { id: data.id, message: `Workflow "${args.name}" created with ID ${data.id}` } };
+        const id = await createWorkflow(
+          args.name as string,
+          args.description as string | undefined
+        );
+        return { success: true, data: { id, message: `Workflow "${args.name}" created with ID ${id}` } };
       }
 
       case 'update_workflow': {
-        const res = await fetch(`${baseUrl}/api/workflows/${args.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: args.name,
-            description: args.description,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update workflow');
+        await updateWorkflow(
+          args.id as number,
+          args.name as string,
+          args.description as string | undefined
+        );
         return { success: true, data: { message: `Workflow ${args.id} updated successfully` } };
       }
 
       case 'delete_workflow': {
-        const res = await fetch(`${baseUrl}/api/workflows/${args.id}`, {
-          method: 'DELETE',
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to delete workflow');
+        await deleteWorkflow(args.id as number);
         return { success: true, data: { message: `Workflow ${args.id} deleted successfully` } };
       }
 
       // Activity Tools
       case 'list_activities': {
-        const res = await fetch(`${baseUrl}/api/activities?workflowId=${args.workflowId}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to list activities');
-        return { success: true, data: { activities: data.activities, swimlanes: data.swimlanes } };
+        const activities = await getActivities(args.workflowId as number);
+        const swimlanes = await getSwimlaneConfig(args.workflowId as number);
+        return { success: true, data: { activities, swimlanes } };
       }
 
       case 'create_activity': {
-        const res = await fetch(`${baseUrl}/api/activities`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workflowId: args.workflowId,
-            activity_name: args.activity_name,
-            grid_location: args.grid_location,
-            activity_type: args.activity_type || 'task',
-            connections: args.connections,
-            status: args.status,
-            task_time_size: args.task_time_size,
-            labor_rate_size: args.labor_rate_size,
-            volume_size: args.volume_size,
-            transformation_plan: args.transformation_plan,
-            phase: args.phase,
-            opportunities: args.opportunities,
-            process_steps: args.process_steps,
-            systems_touched: args.systems_touched,
-            constraints_rules: args.constraints_rules,
-          }),
+        const id = await createActivity(args.workflowId as number, {
+          activity_name: args.activity_name as string,
+          grid_location: args.grid_location as string,
+          activity_type: (args.activity_type as 'task' | 'decision') || 'task',
+          connections: args.connections as string | undefined,
+          status: args.status as string | undefined,
+          task_time_size: args.task_time_size as string | undefined,
+          labor_rate_size: args.labor_rate_size as string | undefined,
+          volume_size: args.volume_size as string | undefined,
+          transformation_plan: args.transformation_plan as string | undefined,
+          phase: args.phase as number | undefined,
+          opportunities: args.opportunities as string | undefined,
+          process_steps: args.process_steps as string | undefined,
+          systems_touched: args.systems_touched as string | undefined,
+          constraints_rules: args.constraints_rules as string | undefined,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to create activity');
-        return { success: true, data: { id: data.id, message: `Activity "${args.activity_name}" created at ${args.grid_location} with ID ${data.id}` } };
+        return { success: true, data: { id, message: `Activity "${args.activity_name}" created at ${args.grid_location} with ID ${id}` } };
       }
 
       case 'update_activity': {
-        const res = await fetch(`${baseUrl}/api/activities/${args.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            activity_name: args.activity_name,
-            grid_location: args.grid_location,
-            activity_type: args.activity_type,
-            connections: args.connections,
-            status: args.status,
-            task_time_size: args.task_time_size,
-            labor_rate_size: args.labor_rate_size,
-            volume_size: args.volume_size,
-            transformation_plan: args.transformation_plan,
-            phase: args.phase,
-            opportunities: args.opportunities,
-          }),
+        await updateActivity(args.id as number, {
+          activity_name: args.activity_name as string,
+          activity_type: args.activity_type as 'task' | 'decision',
+          grid_location: args.grid_location as string,
+          connections: args.connections as string | undefined,
+          status: args.status as string | undefined,
+          task_time_size: args.task_time_size as string | undefined,
+          labor_rate_size: args.labor_rate_size as string | undefined,
+          volume_size: args.volume_size as string | undefined,
+          transformation_plan: args.transformation_plan as string | undefined,
+          phase: args.phase as number | undefined,
+          opportunities: args.opportunities as string | undefined,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update activity');
         return { success: true, data: { message: `Activity ${args.id} updated successfully` } };
       }
 
       case 'delete_activity': {
-        const res = await fetch(`${baseUrl}/api/activities/${args.id}`, {
-          method: 'DELETE',
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to delete activity');
+        await deleteActivity(args.id as number);
         return { success: true, data: { message: `Activity ${args.id} deleted successfully` } };
       }
 
       // Swimlane Tools
       case 'list_swimlanes': {
-        const res = await fetch(`${baseUrl}/api/swimlanes?workflowId=${args.workflowId}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to list swimlanes');
-        return { success: true, data: data.swimlanes };
+        const swimlanes = await getSwimlaneConfig(args.workflowId as number);
+        return { success: true, data: swimlanes };
       }
 
       case 'create_swimlane': {
-        const res = await fetch(`${baseUrl}/api/swimlanes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workflowId: args.workflowId,
-            letter: args.letter,
-            name: args.name,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to create swimlane');
+        await saveSwimlaneConfig(
+          args.workflowId as number,
+          args.letter as string,
+          args.name as string
+        );
         return { success: true, data: { message: `Swimlane "${args.letter}: ${args.name}" created successfully` } };
       }
 
       case 'update_swimlane': {
-        const res = await fetch(`${baseUrl}/api/swimlanes`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workflowId: args.workflowId,
-            letter: args.letter,
-            name: args.name,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to update swimlane');
+        await saveSwimlaneConfig(
+          args.workflowId as number,
+          args.letter as string,
+          args.name as string
+        );
         return { success: true, data: { message: `Swimlane "${args.letter}" updated to "${args.name}"` } };
       }
 
       // Query Tools
       case 'get_tshirt_config': {
-        const res = await fetch(`${baseUrl}/api/tshirt-config`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to get t-shirt config');
-        return { success: true, data: data.config };
+        const config = await getTshirtConfig();
+        return { success: true, data: config };
       }
 
       default:

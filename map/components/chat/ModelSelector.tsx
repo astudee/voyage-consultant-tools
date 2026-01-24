@@ -46,9 +46,21 @@ export default function ModelSelector({ provider, onProviderChange, disabled = f
         >
           Claude
         </button>
+        <button
+          onClick={() => onProviderChange('chatgpt')}
+          disabled={disabled}
+          className="px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 border-l"
+          style={{
+            backgroundColor: provider === 'chatgpt' ? brandColors.darkBlue : 'white',
+            color: provider === 'chatgpt' ? 'white' : brandColors.darkBlue,
+            borderColor: brandColors.mediumBlue,
+          }}
+        >
+          ChatGPT
+        </button>
       </div>
       <span className="text-xs" style={{ color: brandColors.gray }}>
-        {provider === 'gemini' ? '(faster)' : '(smarter)'}
+        {provider === 'gemini' ? '(fastest)' : provider === 'claude' ? '(smartest)' : '(nicest)'}
       </span>
     </div>
   );

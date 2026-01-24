@@ -1,6 +1,6 @@
 // AI Chat Types
 
-export type AIProvider = 'gemini' | 'claude';
+export type AIProvider = 'gemini' | 'claude' | 'chatgpt';
 
 export interface ChatMessage {
   id: string;

@@ -368,8 +368,10 @@ A new feature for conducting time and motion studies on workflow activities. Loc
 - `map/app/time-study/new/components/Step4FlagsOutcomes.tsx` - Flags and outcomes selection
 - `map/app/time-study/new/components/Step5Review.tsx` - Configuration summary before creation
 - `map/app/time-study/[studyId]/session/new/page.tsx` - Session start form (observer name, worker name, date)
-- `map/app/time-study/[studyId]/session/[sessionId]/observe/page.tsx` - Timer UI with step support
-- `map/app/time-study/[studyId]/session/[sessionId]/observe/components/CodingModal.tsx` - Activity, outcome, flags, notes, opportunity coding
+- `map/app/time-study/[studyId]/session/[sessionId]/observe/page.tsx` - Timer UI with tally-counter style for Simple, Stop & Code for Phases/Segments
+- `map/app/time-study/[studyId]/session/[sessionId]/observe/components/CodingModal.tsx` - Activity, outcome, flags, notes, opportunity coding (for Phases/Segments)
+- `map/app/time-study/[studyId]/session/[sessionId]/observe/components/EditObservationModal.tsx` - Edit observation after logging
+- `map/app/time-study/[studyId]/session/[sessionId]/observe/components/EndSessionModal.tsx` - Final observation on session end
 - `map/app/time-study/[studyId]/summary/page.tsx` - Study summary dashboard with overview, activities, steps, and sessions tabs
 
 **Next Steps:**
@@ -386,8 +388,12 @@ A new feature for conducting time and motion studies on workflow activities. Loc
 2. **Study setup wizard** ✅ - configure new study (basics → activities → time structure → flags → review)
 3. **Study summary** ✅ - analytics dashboard with stats by activity, segment, flag, disposition
 4. **Session start** ✅ - pick study, enter observer/worker
-5. **Observation screen** ✅ - timer UI (adapts based on template type: simple, phases, segments)
-6. **Coding modal** ✅ - classify each observation after stopping timer
+5. **Observation screen** ✅ - timer UI with two modes:
+   - **Simple timer:** Tally-counter style - tap outcome to log + auto-restart (no modal)
+   - **Phases/Segments:** Stop & Code flow - stop timer, then fill out coding modal
+6. **Coding modal** ✅ - classify each observation (for Phases/Segments studies)
+7. **Edit observation modal** ✅ - tap logged observation to edit activity, outcome, flags, notes
+8. **End session modal** ✅ - choose outcome for final observation or discard
 
 ### Key Reporting Views
 - Overall stats (avg/median/min/max/stddev duration, disposition breakdown)
@@ -395,6 +401,54 @@ A new feature for conducting time and motion studies on workflow activities. Loc
 - By Segment (time per segment, skip rate, revisit rate)
 - By Flag (frequency, time comparison vs overall)
 - Opportunities logged (grouped/deduplicated improvement ideas)
+
+---
+
+## Active Debugging Session - January 24, 2026 (Continued)
+
+### Time Study Issues Being Investigated
+
+**Reported Issues:**
+1. Summary tab shows "No observations recorded yet" but Sessions tab shows "4 observations"
+2. Activities tab shows "No activity data available yet"
+3. Lap view doesn't appear during observation (session refresh failing)
+4. Button shows "..." for too long - feels unresponsive
+
+**Fixes Applied:**
+
+1. **Created Debug API Endpoint** (`/api/time-study/debug/[studyId]`)
+   - Returns raw query results for troubleshooting
+   - Shows study, sessions, observations, activities, outcomes
+   - Runs summary SQL directly to compare results
+   - File: `map/app/api/time-study/debug/[studyId]/route.ts`
+
+2. **Reduced Debounce Time** (500ms → 200ms)
+   - File: `map/app/time-study/[studyId]/session/[sessionId]/observe/page.tsx:83`
+
+3. **Added Console Logging to APIs**
+   - Session GET: logs session ID, observation count
+   - Observations POST: logs body, created observation ID
+   - Files: `map/app/api/time-study/sessions/[id]/route.ts`, `map/app/api/time-study/sessions/[id]/observations/route.ts`
+
+4. **Implemented Optimistic Updates for Button UX**
+   - Observation added to list immediately on tap (no waiting for API)
+   - Timer resets instantly for snappy tally-counter UX
+   - API call completes in background
+   - Session refresh happens asynchronously after save
+   - On error: reverts optimistic update and shows error
+   - File: `map/app/time-study/[studyId]/session/[sessionId]/observe/page.tsx` (handleQuickLog function)
+
+**To Debug Summary/Activities Tab Issue:**
+- Use debug endpoint: `GET /api/time-study/debug/{studyId}`
+- Check if observations have `study_activity_id` set correctly
+- The activity summary query joins on `study_activity_id` - if NULL, observations may show as "Unspecified"
+- Sessions tab counts observations directly; Summary/Activities tabs use different aggregation queries
+
+**Key Investigation Points:**
+- Check browser console for API errors
+- Check server logs for SQL errors
+- Verify observations are saved with correct `study_activity_id` (not NULL)
+- The `getStudySummary` function returns NULL only if study doesn't exist
 
 ---
 

@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { ChatMessage, AIProvider, StreamChunk } from '@/lib/ai/types';
 import { streamGeminiResponse } from '@/lib/ai/gemini-provider';
 import { streamClaudeResponse } from '@/lib/ai/claude-provider';
+import { streamOpenAIResponse } from '@/lib/ai/openai-provider';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (!provider || !['gemini', 'claude'].includes(provider)) {
-      return new Response(JSON.stringify({ error: 'Valid provider (gemini or claude) is required' }), {
+    if (!provider || !['gemini', 'claude', 'chatgpt'].includes(provider)) {
+      return new Response(JSON.stringify({ error: 'Valid provider (gemini, claude, or chatgpt) is required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -57,8 +58,10 @@ export async function POST(request: NextRequest) {
         try {
           if (provider === 'gemini') {
             await streamGeminiResponse(messages, callbacks);
-          } else {
+          } else if (provider === 'claude') {
             await streamClaudeResponse(messages, callbacks);
+          } else {
+            await streamOpenAIResponse(messages, callbacks);
           }
         } catch (error) {
           callbacks.onError(error instanceof Error ? error.message : 'Stream error');
