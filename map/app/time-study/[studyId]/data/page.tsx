@@ -185,11 +185,24 @@ export default function DataGridPage() {
         size: 40,
       }),
       columnHelper.accessor('id', {
-        header: 'Ob #',
+        header: 'Ob',
         cell: (info) => (
-          <span className="font-mono text-gray-500">#{info.getValue()}</span>
+          <span className="font-mono text-gray-500">{info.getValue()}</span>
         ),
-        size: 70,
+        size: 60,
+      }),
+      columnHelper.accessor('session_date', {
+        header: 'Date',
+        cell: (info) => {
+          const date = info.getValue();
+          if (!date) return <span className="text-gray-400">--</span>;
+          return (
+            <span className="text-sm text-gray-600">
+              {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          );
+        },
+        size: 80,
       }),
       columnHelper.accessor('session_observer_name', {
         header: 'Observer',
@@ -198,8 +211,17 @@ export default function DataGridPage() {
         ),
         filterFn: 'includesString',
       }),
+      columnHelper.accessor('session_observed_worker', {
+        header: 'Observed',
+        cell: (info) => {
+          const worker = info.getValue();
+          if (!worker) return <span className="text-gray-400">--</span>;
+          return <span className="text-sm">{worker}</span>;
+        },
+        filterFn: 'includesString',
+      }),
       columnHelper.accessor('total_duration_seconds', {
-        header: 'Time',
+        header: 'Duration',
         cell: (info) => (
           <span className="font-mono text-sm">
             {formatDuration(info.getValue())}
