@@ -32,12 +32,19 @@ export default function StudySummaryPage() {
   );
 
   useEffect(() => {
+    console.log('[Summary Page] Fetching data for study:', studyId);
     Promise.all([
       fetch(`/api/time-study/studies/${studyId}`).then((r) => r.json()),
       fetch(`/api/time-study/studies/${studyId}/summary`).then((r) => r.json()),
       fetch(`/api/time-study/studies/${studyId}/sessions`).then((r) => r.json()),
     ])
       .then(([studyData, summaryData, sessionsData]) => {
+        console.log('[Summary Page] studyData:', studyData);
+        console.log('[Summary Page] summaryData:', summaryData);
+        console.log('[Summary Page] summaryData.summary:', summaryData.summary);
+        console.log('[Summary Page] summaryData.activitySummary:', summaryData.activitySummary);
+        console.log('[Summary Page] sessionsData:', sessionsData);
+
         if (studyData.error) throw new Error(studyData.error);
 
         setData({
@@ -50,6 +57,7 @@ export default function StudySummaryPage() {
         setLoading(false);
       })
       .catch((err) => {
+        console.error('[Summary Page] Error:', err);
         setError(err.message || 'Failed to load data');
         setLoading(false);
       });

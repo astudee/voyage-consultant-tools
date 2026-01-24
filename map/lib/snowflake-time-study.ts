@@ -1042,17 +1042,18 @@ export async function getStudyFlagSummary(studyId: number): Promise<{
   const totalCount = overallRows[0]?.TOTAL_COUNT as number || 0;
 
   // Get flag-level stats
+  // Note: "of" is a reserved word in Snowflake, use "obs_flags" instead
   const sql = `
     SELECT
       f.flag_name,
-      COUNT(DISTINCT of.observation_id) as observation_count,
+      COUNT(DISTINCT obs_flags.observation_id) as observation_count,
       AVG(o.total_duration_seconds) as avg_duration_seconds
     FROM time_study_flags f
-    LEFT JOIN time_study_observation_flags of ON f.id = of.flag_id
-    LEFT JOIN time_study_observations o ON of.observation_id = o.id
+    LEFT JOIN time_study_observation_flags obs_flags ON f.id = obs_flags.flag_id
+    LEFT JOIN time_study_observations o ON obs_flags.observation_id = o.id
     WHERE f.study_id = ?
     GROUP BY f.id, f.flag_name
-    ORDER BY COUNT(DISTINCT of.observation_id) DESC
+    ORDER BY COUNT(DISTINCT obs_flags.observation_id) DESC
   `;
 
   const rows = await executeQuery<Record<string, unknown>>(sql, [studyId]);

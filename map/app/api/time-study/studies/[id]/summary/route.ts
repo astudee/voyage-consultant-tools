@@ -16,17 +16,23 @@ export async function GET(
   try {
     const { id } = await params;
     const studyId = parseInt(id, 10);
+    console.log(`[Summary API] Fetching summary for study ${studyId}`);
+
     if (isNaN(studyId)) {
+      console.log(`[Summary API] Invalid study ID: ${id}`);
       return NextResponse.json({ error: 'Invalid study ID' }, { status: 400 });
     }
 
     // Get study to check structure type
     const study = await getStudy(studyId);
     if (!study) {
+      console.log(`[Summary API] Study not found: ${studyId}`);
       return NextResponse.json({ error: 'Study not found' }, { status: 404 });
     }
+    console.log(`[Summary API] Found study: ${study.study_name}, structure: ${study.structure_type}`);
 
     // Get all summary data in parallel
+    console.log(`[Summary API] Fetching summary data...`);
     const [summary, activitySummary, flagSummary, opportunities, dispositionBreakdown] =
       await Promise.all([
         getStudySummary(studyId),
@@ -36,13 +42,17 @@ export async function GET(
         getStudyDispositionBreakdown(studyId),
       ]);
 
+    console.log(`[Summary API] summary:`, JSON.stringify(summary));
+    console.log(`[Summary API] activitySummary count: ${activitySummary?.length || 0}`);
+    console.log(`[Summary API] activitySummary:`, JSON.stringify(activitySummary));
+
     // Only get step summary for phases/segments studies
     let stepSummary = null;
     if (study.structure_type !== 'simple') {
       stepSummary = await getStudyStepSummary(studyId);
     }
 
-    return NextResponse.json({
+    const response = {
       study,
       summary,
       activitySummary,
@@ -50,9 +60,12 @@ export async function GET(
       flagSummary,
       opportunities,
       dispositionBreakdown,
-    });
+    };
+    console.log(`[Summary API] Returning response with summary.observation_count: ${summary?.observation_count}`);
+
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('API error fetching study summary:', error);
+    console.error('[Summary API] Error fetching study summary:', error);
     return NextResponse.json(
       { error: 'Failed to fetch study summary', details: String(error) },
       { status: 500 }

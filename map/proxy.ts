@@ -9,6 +9,7 @@ export async function proxy(request: NextRequest) {
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/time-study/debug") || // Allow debug endpoint without auth
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico"
   ) {

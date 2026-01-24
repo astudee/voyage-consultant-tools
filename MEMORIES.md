@@ -404,51 +404,40 @@ A new feature for conducting time and motion studies on workflow activities. Loc
 
 ---
 
-## Active Debugging Session - January 24, 2026 (Continued)
+## Session - January 24, 2026 (Continued)
 
-### Time Study Issues Being Investigated
+### Time Study Bug Fix - Summary/Activities Not Showing Data
 
-**Reported Issues:**
-1. Summary tab shows "No observations recorded yet" but Sessions tab shows "4 observations"
-2. Activities tab shows "No activity data available yet"
-3. Lap view doesn't appear during observation (session refresh failing)
-4. Button shows "..." for too long - feels unresponsive
+**Symptoms:**
+- Summary tab showed "No observations recorded yet"
+- Activities tab showed "No activity data available yet"
+- Sessions tab correctly showed observation counts
+- Lap view wasn't updating during observation
 
-**Fixes Applied:**
+**Root Cause Found:**
+SQL syntax error in `getStudyFlagSummary` function - the alias `of` is a **reserved word in Snowflake**!
 
-1. **Created Debug API Endpoint** (`/api/time-study/debug/[studyId]`)
-   - Returns raw query results for troubleshooting
-   - Shows study, sessions, observations, activities, outcomes
-   - Runs summary SQL directly to compare results
-   - File: `map/app/api/time-study/debug/[studyId]/route.ts`
+```sql
+-- BROKEN: "of" is a reserved word
+LEFT JOIN time_study_observation_flags of ON f.id = of.flag_id
 
-2. **Reduced Debounce Time** (500ms → 200ms)
-   - File: `map/app/time-study/[studyId]/session/[sessionId]/observe/page.tsx:83`
+-- FIXED: renamed to "obs_flags"
+LEFT JOIN time_study_observation_flags obs_flags ON f.id = obs_flags.flag_id
+```
 
-3. **Added Console Logging to APIs**
-   - Session GET: logs session ID, observation count
-   - Observations POST: logs body, created observation ID
-   - Files: `map/app/api/time-study/sessions/[id]/route.ts`, `map/app/api/time-study/sessions/[id]/observations/route.ts`
+The error message was: `syntax error line 4 at position 21 unexpected 'of'`
 
-4. **Implemented Optimistic Updates for Button UX**
-   - Observation added to list immediately on tap (no waiting for API)
-   - Timer resets instantly for snappy tally-counter UX
-   - API call completes in background
-   - Session refresh happens asynchronously after save
-   - On error: reverts optimistic update and shows error
-   - File: `map/app/time-study/[studyId]/session/[sessionId]/observe/page.tsx` (handleQuickLog function)
+**Fix Applied:**
+- File: `map/lib/snowflake-time-study.ts` (getStudyFlagSummary function, ~line 1048)
+- Changed alias from `of` to `obs_flags`
 
-**To Debug Summary/Activities Tab Issue:**
-- Use debug endpoint: `GET /api/time-study/debug/{studyId}`
-- Check if observations have `study_activity_id` set correctly
-- The activity summary query joins on `study_activity_id` - if NULL, observations may show as "Unspecified"
-- Sessions tab counts observations directly; Summary/Activities tabs use different aggregation queries
+**Additional Fixes from Earlier:**
+1. **Optimistic Updates** - Button UX now snappy, timer resets immediately
+2. **Reduced Debounce** - 500ms → 200ms
+3. **Debug Endpoint** - `/api/time-study/debug/[studyId]` for troubleshooting
+4. **Console Logging** - Added to session and observation APIs
 
-**Key Investigation Points:**
-- Check browser console for API errors
-- Check server logs for SQL errors
-- Verify observations are saved with correct `study_activity_id` (not NULL)
-- The `getStudySummary` function returns NULL only if study doesn't exist
+**Lesson Learned:** In Snowflake SQL, avoid using `of` as a table alias - it's a reserved keyword
 
 ---
 
