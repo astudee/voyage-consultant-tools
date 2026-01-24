@@ -448,6 +448,9 @@ The error message was: `syntax error line 4 at position 21 unexpected 'of'`
 - **Real-time sync**: Multiple observers timing same study could benefit from live updates
 - **Mobile optimization**: Timer UI works but could be optimized for tablet/mobile use in field
 
+### Development Process Notes
+- **AI Chatbot Knowledge Base**: When building new features, update the AI chatbot's knowledge base (`map/lib/ai/system-prompt.ts`) so users can interact with the feature via chat (create studies, query data, ask questions). This keeps the chatbot aware of all application capabilities.
+
 ---
 
 ## Session - January 24, 2026 (Data Grid Implementation)
@@ -534,6 +537,49 @@ interface StudyObservationRow {
 **Navigation:**
 - From Summary page: Click "Data Grid" tab to view all observations
 - From Study list: Go to study summary, then click "Data Grid"
+
+---
+
+### Observation Screen - Inline Annotations
+
+Added inline flags, notes, and opportunities to the tally-counter observation screen for quick annotations without breaking flow.
+
+**New UI Elements:**
+
+```
+┌─────────────────────────────────────────┐
+│              00:47.3                    │
+│                                         │
+│  [ ✓ Complete ]  [ → Transferred ]      │
+│  [ ⏸ Pended ]    [ ✗ Discard ]          │
+│                                         │
+│  [Automatable] [Training] [Exception]   │  ← toggleable flags
+│                                         │
+│  [+ Note]  [! Opportunity]              │  ← inline input buttons
+│─────────────────────────────────────────│
+```
+
+**Features:**
+- **Flag Toggles**: Tap to enable (highlighted), tap again to disable
+- **Flags reset** after each observation is logged
+- **Note Input**: "+ Note" button opens inline text input, Enter to save, Escape to cancel
+- **Opportunity Input**: "! Opportunity" button opens inline text input
+- **Visual indicators**: Buttons show ● when content is queued
+- Annotations attach to the CURRENT observation when outcome is tapped
+
+**Updated Lap Grid Columns:**
+| # | Activity | Duration | Outcome | Flags |
+|---|----------|----------|---------|-------|
+| 5 | Deposit | 00:42 | Complete | Automatable |
+| 4 | Deposit | 01:15 | Complete | |
+| 3 | Inquiry | 00:38 | Transferred | Training, Exception |
+
+- Removed "#" prefix from observation numbers
+- Flags shown as comma-separated text
+- Notes/opportunity indicator (✎) moved to Activity column
+
+**Files Modified:**
+- `map/app/time-study/[studyId]/session/[sessionId]/observe/page.tsx`
 
 ### Verified Working (January 24, 2026)
 - Build passes with no errors

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, endSession, getSessionObservations, getObservationFlags } from '@/lib/snowflake-time-study';
+import { getSession, endSession, getSessionObservations, getObservationFlags, ensureSchemaUpdates } from '@/lib/snowflake-time-study';
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +14,9 @@ export async function GET(
       console.log(`[Session GET] Invalid session ID: ${id}`);
       return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
     }
+
+    // Ensure schema is up to date (adds call_duration/acw_duration columns if needed)
+    await ensureSchemaUpdates();
 
     const session = await getSession(sessionId);
     if (!session) {

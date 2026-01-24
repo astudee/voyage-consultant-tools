@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionObservations, createObservation, createObservationStep } from '@/lib/snowflake-time-study';
+import { getSessionObservations, createObservation, createObservationStep, ensureSchemaUpdates } from '@/lib/snowflake-time-study';
 
 export async function GET(
   request: NextRequest,
@@ -11,6 +11,9 @@ export async function GET(
     if (isNaN(sessionId)) {
       return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
     }
+
+    // Ensure schema is up to date
+    await ensureSchemaUpdates();
 
     const observations = await getSessionObservations(sessionId);
     return NextResponse.json({ observations });
@@ -37,6 +40,9 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid session ID' }, { status: 400 });
     }
 
+    // Ensure schema is up to date
+    await ensureSchemaUpdates();
+
     const body = await request.json();
     console.log(`[Observation POST] Body:`, JSON.stringify(body));
     const {
@@ -46,6 +52,8 @@ export async function POST(
       started_at,
       ended_at,
       total_duration_seconds,
+      call_duration_seconds,
+      acw_duration_seconds,
       outcome_id,
       notes,
       opportunity,
@@ -68,6 +76,8 @@ export async function POST(
       started_at,
       ended_at: ended_at || null,
       total_duration_seconds: total_duration_seconds || null,
+      call_duration_seconds: call_duration_seconds || null,
+      acw_duration_seconds: acw_duration_seconds || null,
       outcome_id: outcome_id || null,
       notes: notes || null,
       opportunity: opportunity || null,

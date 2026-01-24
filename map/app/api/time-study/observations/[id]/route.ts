@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getObservation, updateObservation, deleteObservation } from '@/lib/snowflake-time-study';
+import { getObservation, updateObservation, deleteObservation, ensureSchemaUpdates } from '@/lib/snowflake-time-study';
 
 export async function GET(
   request: NextRequest,
@@ -11,6 +11,9 @@ export async function GET(
     if (isNaN(observationId)) {
       return NextResponse.json({ error: 'Invalid observation ID' }, { status: 400 });
     }
+
+    // Ensure schema is up to date
+    await ensureSchemaUpdates();
 
     const observation = await getObservation(observationId);
     if (!observation) {
@@ -37,6 +40,9 @@ export async function PUT(
     if (isNaN(observationId)) {
       return NextResponse.json({ error: 'Invalid observation ID' }, { status: 400 });
     }
+
+    // Ensure schema is up to date
+    await ensureSchemaUpdates();
 
     const body = await request.json();
     await updateObservation(observationId, body);

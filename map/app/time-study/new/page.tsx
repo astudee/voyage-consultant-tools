@@ -198,7 +198,10 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
   }
 }
 
-const STEPS = ['Basics', 'Activities', 'Time Structure', 'Flags & Outcomes', 'Review'];
+// Steps that include Time Structure (for 'segments' template only)
+const ALL_STEPS = ['Basics', 'Activities', 'Time Structure', 'Flags & Outcomes', 'Review'];
+// Steps for 'simple' and 'phases' templates (no Time Structure step)
+const SIMPLE_STEPS = ['Basics', 'Activities', 'Flags & Outcomes', 'Review'];
 
 export default function NewStudyWizard() {
   const router = useRouter();
@@ -210,6 +213,18 @@ export default function NewStudyWizard() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Determine which steps to show based on structure type
+  // Only 'segments' structure type needs the Time Structure step
+  const needsTimeStructure = state.structureType === 'segments';
+  const STEPS = needsTimeStructure ? ALL_STEPS : SIMPLE_STEPS;
+
+  // Keep currentStep within bounds when step list changes
+  useEffect(() => {
+    if (currentStep >= STEPS.length) {
+      setCurrentStep(STEPS.length - 1);
+    }
+  }, [STEPS.length, currentStep]);
 
   // Fetch templates and workflows on mount
   useEffect(() => {
@@ -229,18 +244,19 @@ export default function NewStudyWizard() {
       });
   }, []);
 
-  // Validation for each step
+  // Validation for each step - use step name to determine validation
   const canProceed = (): boolean => {
-    switch (currentStep) {
-      case 0: // Basics
+    const currentStepName = STEPS[currentStep];
+    switch (currentStepName) {
+      case 'Basics':
         return state.studyName.trim().length > 0 && state.templateId !== null;
-      case 1: // Activities
+      case 'Activities':
         return state.activities.some((a) => a.selected);
-      case 2: // Time Structure
+      case 'Time Structure':
         return true; // Steps are optional
-      case 3: // Flags & Outcomes
+      case 'Flags & Outcomes':
         return state.outcomes.some((o) => o.selected);
-      case 4: // Review
+      case 'Review':
         return true;
       default:
         return false;
@@ -350,8 +366,9 @@ export default function NewStudyWizard() {
   }
 
   const renderStep = () => {
-    switch (currentStep) {
-      case 0:
+    const currentStepName = STEPS[currentStep];
+    switch (currentStepName) {
+      case 'Basics':
         return (
           <Step1Basics
             state={state}
@@ -360,7 +377,7 @@ export default function NewStudyWizard() {
             workflows={workflows}
           />
         );
-      case 1:
+      case 'Activities':
         return (
           <Step2Activities
             state={state}
@@ -368,11 +385,11 @@ export default function NewStudyWizard() {
             workflowId={state.workflowId}
           />
         );
-      case 2:
+      case 'Time Structure':
         return <Step3TimeStructure state={state} dispatch={dispatch} />;
-      case 3:
+      case 'Flags & Outcomes':
         return <Step4FlagsOutcomes state={state} dispatch={dispatch} />;
-      case 4:
+      case 'Review':
         return (
           <Step5Review
             state={state}

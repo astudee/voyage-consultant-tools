@@ -57,6 +57,42 @@ export type {
 // Export StudyObservationRow type is defined inline in the file
 
 // ============================================
+// SCHEMA MIGRATIONS
+// ============================================
+
+// Track if migrations have been run this session
+let migrationsRun = false;
+
+/**
+ * Ensure required schema columns exist for Contact Center/phases functionality.
+ * This adds call_duration_seconds and acw_duration_seconds columns if they don't exist.
+ */
+export async function ensureSchemaUpdates(): Promise<void> {
+  if (migrationsRun) return;
+
+  try {
+    // Add call_duration_seconds column if it doesn't exist
+    await executeQuery(`
+      ALTER TABLE time_study_observations
+      ADD COLUMN IF NOT EXISTS call_duration_seconds DECIMAL(10,2)
+    `);
+
+    // Add acw_duration_seconds column if it doesn't exist
+    await executeQuery(`
+      ALTER TABLE time_study_observations
+      ADD COLUMN IF NOT EXISTS acw_duration_seconds DECIMAL(10,2)
+    `);
+
+    migrationsRun = true;
+    console.log('[Schema] Ensured call_duration_seconds and acw_duration_seconds columns exist');
+  } catch (error) {
+    // Log but don't throw - the columns might already exist or another error occurred
+    console.warn('[Schema] Migration warning (columns may already exist):', error);
+    migrationsRun = true; // Don't retry on every request
+  }
+}
+
+// ============================================
 // TEMPLATES
 // ============================================
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStudyObservations, createStudyObservation, deleteObservationsBulk } from '@/lib/snowflake-time-study';
+import { getStudyObservations, createStudyObservation, deleteObservationsBulk, ensureSchemaUpdates } from '@/lib/snowflake-time-study';
 
 // GET all observations for a study (for data grid view)
 export async function GET(
@@ -12,6 +12,9 @@ export async function GET(
     if (isNaN(studyId)) {
       return NextResponse.json({ error: 'Invalid study ID' }, { status: 400 });
     }
+
+    // Ensure schema is up to date
+    await ensureSchemaUpdates();
 
     const observations = await getStudyObservations(studyId);
     return NextResponse.json({ observations });
@@ -36,6 +39,9 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid study ID' }, { status: 400 });
     }
 
+    // Ensure schema is up to date
+    await ensureSchemaUpdates();
+
     const body = await request.json();
 
     // Validate required fields
@@ -53,6 +59,8 @@ export async function POST(
       started_at: body.started_at,
       ended_at: body.ended_at || null,
       total_duration_seconds: body.total_duration_seconds || null,
+      call_duration_seconds: body.call_duration_seconds || null,
+      acw_duration_seconds: body.acw_duration_seconds || null,
       outcome_id: body.outcome_id || null,
       notes: body.notes || null,
       opportunity: body.opportunity || null,

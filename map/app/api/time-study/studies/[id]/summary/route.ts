@@ -8,6 +8,7 @@ import {
   getStudyDispositionBreakdown,
   getStudy,
   getContactCenterStats,
+  ensureSchemaUpdates,
 } from '@/lib/snowflake-time-study';
 
 export async function GET(
@@ -18,6 +19,9 @@ export async function GET(
     const { id } = await params;
     const studyId = parseInt(id, 10);
     console.log(`[Summary API] Fetching summary for study ${studyId}`);
+
+    // Ensure schema is up to date (for contact center stats)
+    await ensureSchemaUpdates();
 
     if (isNaN(studyId)) {
       console.log(`[Summary API] Invalid study ID: ${id}`);
