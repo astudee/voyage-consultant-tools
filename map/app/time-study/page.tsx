@@ -196,6 +196,12 @@ export default function TimeStudyListPage() {
                     >
                       View Summary
                     </Link>
+                    <Link
+                      href={`/time-study/${study.id}/settings`}
+                      className="text-gray-600 px-3 py-1.5 rounded text-sm hover:bg-gray-100"
+                    >
+                      Edit
+                    </Link>
                     <button
                       onClick={() => handleDelete(study.id, study.study_name)}
                       className="text-red-600 px-3 py-1.5 rounded text-sm hover:bg-red-50"
