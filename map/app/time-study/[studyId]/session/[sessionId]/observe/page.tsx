@@ -147,7 +147,10 @@ export default function ObservationPage() {
   // Quick log for simple timer - tap outcome = log + restart
   const handleQuickLog = useCallback(
     async (outcomeId: number) => {
-      if (!timerStartedAt || !studyData || !sessionData) return;
+      if (!timerStartedAt || !studyData || !sessionData) {
+        console.error('handleQuickLog: missing required data', { timerStartedAt, studyData: !!studyData, sessionData: !!sessionData });
+        return;
+      }
 
       setSavingObservation(true);
       setError(null);
@@ -157,30 +160,39 @@ export default function ObservationPage() {
         const observationNumber = (sessionData.observations?.length || 0) + 1;
         const totalDurationSeconds = Math.floor(elapsedSeconds);
 
+        const payload = {
+          study_activity_id: selectedActivityId,
+          adhoc_activity_name: null,
+          observation_number: observationNumber,
+          started_at: timerStartedAt,
+          ended_at: endedAt,
+          total_duration_seconds: totalDurationSeconds,
+          outcome_id: outcomeId,
+          notes: null,
+          opportunity: null,
+          flag_ids: [],
+          steps: [],
+        };
+
         const response = await fetch(`/api/time-study/sessions/${sessionId}/observations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            study_activity_id: selectedActivityId,
-            adhoc_activity_name: null,
-            observation_number: observationNumber,
-            started_at: timerStartedAt,
-            ended_at: endedAt,
-            total_duration_seconds: totalDurationSeconds,
-            outcome_id: outcomeId,
-            notes: null,
-            opportunity: null,
-            flag_ids: [],
-            steps: [],
-          }),
+          body: JSON.stringify(payload),
         });
 
         const result = await response.json();
-        if (result.error) throw new Error(result.error);
+        if (result.error) {
+          console.error('API error:', result);
+          throw new Error(result.error);
+        }
 
         // Refresh session data
         const sessionRes = await fetch(`/api/time-study/sessions/${sessionId}`);
         const newSessionData = await sessionRes.json();
+        if (newSessionData.error) {
+          console.error('Session refresh error:', newSessionData);
+          throw new Error(newSessionData.error);
+        }
         setSessionData(newSessionData);
 
         // Restart timer immediately
@@ -188,6 +200,7 @@ export default function ObservationPage() {
         setTimerStartedAt(now);
         setElapsedSeconds(0);
       } catch (err) {
+        console.error('handleQuickLog error:', err);
         setError(err instanceof Error ? err.message : 'Failed to save observation');
       } finally {
         setSavingObservation(false);
@@ -668,54 +681,71 @@ export default function ObservationPage() {
           </div>
         </div>
 
-        {/* Stats Bar */}
-        <div className="bg-gray-850 border-y border-gray-700 px-4 py-2 text-center text-sm text-gray-400">
-          {totalObservations} observation{totalObservations !== 1 ? 's' : ''} · {formatDuration(totalDuration)} total
-        </div>
-
         {/* Observations List */}
-        <div className="flex-1 overflow-auto p-3">
-          <div className="max-w-md mx-auto space-y-2">
+        <div className="flex-1 overflow-auto">
+          <div className="max-w-md mx-auto">
             {(!observations || observations.length === 0) ? (
               <p className="text-gray-500 text-center py-8 text-sm">
                 {isTimerRunning ? 'Tap an outcome when done' : 'Tap Start to begin'}
               </p>
             ) : (
-              [...observations].reverse().map((obs) => (
-                <button
-                  key={obs.id}
-                  onClick={() => handleEditObservation(obs)}
-                  className="w-full bg-gray-800 rounded-lg p-3 border border-gray-700 hover:border-gray-600 transition-colors text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500 text-sm">#{obs.observation_number}</span>
-                      <span className="font-mono">{formatDuration(obs.total_duration_seconds)}</span>
-                      {obs.outcome_name && (
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            obs.outcome_name === 'Complete'
-                              ? 'bg-green-900 text-green-300'
-                              : obs.outcome_name === 'Transferred'
-                              ? 'bg-yellow-900 text-yellow-300'
-                              : obs.outcome_name === 'Pended'
-                              ? 'bg-orange-900 text-orange-300'
-                              : 'bg-blue-900 text-blue-300'
-                          }`}
-                        >
-                          {obs.outcome_name}
+              <>
+                {/* Table Header */}
+                <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-900">
+                  <div className="col-span-2">Ob</div>
+                  <div className="col-span-3">Time</div>
+                  <div className="col-span-3">Outcome</div>
+                  <div className="col-span-4">Activity</div>
+                </div>
+
+                {/* Observation Rows */}
+                <div className="divide-y divide-gray-800">
+                  {[...observations].reverse().map((obs) => (
+                    <button
+                      key={obs.id}
+                      onClick={() => handleEditObservation(obs)}
+                      className="w-full grid grid-cols-12 gap-1 px-3 py-2.5 hover:bg-gray-800 transition-colors text-left items-center"
+                    >
+                      <div className="col-span-2 text-gray-400 text-sm">
+                        #{obs.observation_number}
+                      </div>
+                      <div className="col-span-3 font-mono text-sm">
+                        {formatDuration(obs.total_duration_seconds)}
+                      </div>
+                      <div className="col-span-3">
+                        {obs.outcome_name && (
+                          <span
+                            className={`text-xs px-1.5 py-0.5 rounded ${
+                              obs.outcome_name === 'Complete'
+                                ? 'bg-green-900/50 text-green-400'
+                                : obs.outcome_name === 'Transferred'
+                                ? 'bg-yellow-900/50 text-yellow-400'
+                                : obs.outcome_name === 'Pended'
+                                ? 'bg-orange-900/50 text-orange-400'
+                                : 'bg-blue-900/50 text-blue-400'
+                            }`}
+                          >
+                            {obs.outcome_name}
+                          </span>
+                        )}
+                      </div>
+                      <div className="col-span-4 text-xs text-gray-400 truncate flex items-center gap-1">
+                        <span className="truncate">
+                          {obs.activity_name || obs.adhoc_activity_name || '—'}
                         </span>
-                      )}
-                    </div>
-                    {(obs.notes || obs.opportunity || (obs.flags && obs.flags.length > 0)) && (
-                      <span className="text-gray-500 text-xs">✎</span>
-                    )}
-                  </div>
-                  {obs.activity_name && obs.activity_name !== activeActivities[0]?.activity_name && (
-                    <p className="text-xs text-gray-500 mt-1">{obs.activity_name}</p>
-                  )}
-                </button>
-              ))
+                        {(obs.notes || obs.opportunity || (obs.flags && obs.flags.length > 0)) && (
+                          <span className="text-gray-600 flex-shrink-0">✎</span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Footer with totals */}
+                <div className="border-t border-gray-700 px-3 py-2 text-xs text-gray-500 sticky bottom-0 bg-gray-900">
+                  {totalObservations} observation{totalObservations !== 1 ? 's' : ''} · {formatDuration(totalDuration)} total
+                </div>
+              </>
             )}
           </div>
         </div>
