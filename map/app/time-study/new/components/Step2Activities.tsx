@@ -236,7 +236,7 @@ export default function Step2Activities({ state, dispatch, workflowId }: Step2Ac
                     <span className={activity.selected ? 'text-blue-700 font-medium' : 'text-gray-700'}>
                       {activity.activity_name}
                     </span>
-                    <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded">
+                    <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
                       ad-hoc
                     </span>
                   </label>

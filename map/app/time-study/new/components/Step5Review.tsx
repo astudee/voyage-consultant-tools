@@ -124,7 +124,7 @@ export default function Step5Review({ state, templates, workflows }: Step5Review
                     {step.step_name}
                   </span>
                   {state.structureType === 'phases' && index < state.steps.length - 1 && (
-                    <svg className="w-4 h-4 mx-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-4 h-4 mx-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   )}

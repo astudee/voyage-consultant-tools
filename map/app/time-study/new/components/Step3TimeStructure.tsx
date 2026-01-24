@@ -141,7 +141,7 @@ export default function Step3TimeStructure({ state, dispatch }: Step3TimeStructu
               `}
             >
               {/* Drag handle */}
-              <div className="text-gray-400">
+              <div className="text-gray-500">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                 </svg>
@@ -166,7 +166,7 @@ export default function Step3TimeStructure({ state, dispatch }: Step3TimeStructu
                   type="button"
                   onClick={() => moveStep(index, 'up')}
                   disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                  className="p-1 text-gray-500 hover:text-gray-600 disabled:opacity-30"
                   title="Move up"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -177,7 +177,7 @@ export default function Step3TimeStructure({ state, dispatch }: Step3TimeStructu
                   type="button"
                   onClick={() => moveStep(index, 'down')}
                   disabled={index === state.steps.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                  className="p-1 text-gray-500 hover:text-gray-600 disabled:opacity-30"
                   title="Move down"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -203,7 +203,7 @@ export default function Step3TimeStructure({ state, dispatch }: Step3TimeStructu
       ) : (
         <div className="text-center py-8 bg-gray-50 rounded-lg">
           <p className="text-gray-500">No {isPhases ? 'phases' : 'segments'} defined yet.</p>
-          <p className="text-sm text-gray-400 mt-1">Add at least one below.</p>
+          <p className="text-sm text-gray-500 mt-1">Add at least one below.</p>
         </div>
       )}
 
@@ -250,7 +250,7 @@ export default function Step3TimeStructure({ state, dispatch }: Step3TimeStructu
                   {step.step_name}
                 </span>
                 {isPhases && index < state.steps.length - 1 && (
-                  <svg className="w-4 h-4 mx-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4 mx-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 )}

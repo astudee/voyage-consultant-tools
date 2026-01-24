@@ -93,7 +93,7 @@ export default function Step4FlagsOutcomes({ state, dispatch }: Step4FlagsOutcom
                 {flag.flag_name}
               </span>
               {flag.is_standard && (
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                   standard
                 </span>
               )}
@@ -161,7 +161,7 @@ export default function Step4FlagsOutcomes({ state, dispatch }: Step4FlagsOutcom
                   {outcome.outcome_name}
                 </span>
                 {isStandard && (
-                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                     standard
                   </span>
                 )}
@@ -210,7 +210,7 @@ export default function Step4FlagsOutcomes({ state, dispatch }: Step4FlagsOutcom
                 </span>
               ))}
               {selectedFlagsCount === 0 && (
-                <span className="text-xs text-gray-400">No flags selected</span>
+                <span className="text-xs text-gray-500">No flags selected</span>
               )}
             </div>
           </div>

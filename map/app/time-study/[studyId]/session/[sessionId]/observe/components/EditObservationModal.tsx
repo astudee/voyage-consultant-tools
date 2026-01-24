@@ -66,7 +66,7 @@ export default function EditObservationModal({
         <div className="bg-gray-700 px-6 py-4 rounded-t-lg flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">Edit Observation #{observation.observation_number}</h2>
-            <p className="text-sm text-gray-400">Duration: {formatDuration(observation.total_duration_seconds)}</p>
+            <p className="text-sm text-gray-300">Duration: {formatDuration(observation.total_duration_seconds)}</p>
           </div>
         </div>
 
@@ -92,7 +92,7 @@ export default function EditObservationModal({
             </select>
 
             <div className="mt-2">
-              <div className="text-xs text-gray-500 mb-1">Or describe an unplanned activity:</div>
+              <div className="text-xs text-gray-400 mb-1">Or describe an unplanned activity:</div>
               <input
                 type="text"
                 value={adhocActivityName}
@@ -189,7 +189,7 @@ export default function EditObservationModal({
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-gray-400 hover:text-white text-sm"
+              className="px-4 py-2 text-gray-300 hover:text-white text-sm"
               disabled={isSaving}
             >
               Cancel

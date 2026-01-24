@@ -201,7 +201,7 @@ export default function DataGridPage() {
           header: 'Date',
           cell: (info) => {
             const date = info.getValue();
-            if (!date) return <span className="text-gray-400">--</span>;
+            if (!date) return <span className="text-gray-500">--</span>;
             return (
               <span className="text-sm text-gray-600">
                 {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -221,7 +221,7 @@ export default function DataGridPage() {
           header: 'Observed',
           cell: (info) => {
             const worker = info.getValue();
-            if (!worker) return <span className="text-gray-400">--</span>;
+            if (!worker) return <span className="text-gray-500">--</span>;
             return <span className="text-sm">{worker}</span>;
           },
           filterFn: 'includesString',
@@ -244,7 +244,7 @@ export default function DataGridPage() {
               header: 'ACW',
               cell: (info) => {
                 const acw = info.getValue();
-                if (acw == null) return <span className="text-gray-400">--</span>;
+                if (acw == null) return <span className="text-gray-500">--</span>;
                 return (
                   <span className="font-mono text-sm text-orange-600">
                     {formatDuration(acw)}
@@ -280,7 +280,7 @@ export default function DataGridPage() {
           header: 'Activity',
           cell: (info) => (
             <span className="text-sm truncate max-w-[200px] block" title={info.getValue() || ''}>
-              {info.getValue() || <span className="text-gray-400 italic">Not coded</span>}
+              {info.getValue() || <span className="text-gray-500 italic">Not coded</span>}
             </span>
           ),
           filterFn: 'includesString',
@@ -289,7 +289,7 @@ export default function DataGridPage() {
           header: 'Outcome',
           cell: (info) => {
             const outcome = info.getValue();
-            if (!outcome) return <span className="text-gray-400">--</span>;
+            if (!outcome) return <span className="text-gray-500">--</span>;
 
             const colors: Record<string, string> = {
               Complete: 'bg-green-100 text-green-700',

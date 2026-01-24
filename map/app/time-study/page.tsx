@@ -119,7 +119,7 @@ export default function TimeStudyListPage() {
         ) : studies.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <div className="mb-4">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -155,28 +155,28 @@ export default function TimeStudyListPage() {
                     <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
                       {study.workflow_name && (
                         <span>
-                          <span className="text-gray-400">Workflow:</span> {study.workflow_name}
+                          <span className="text-gray-500">Workflow:</span> {study.workflow_name}
                         </span>
                       )}
                       {study.template_name && (
                         <span>
-                          <span className="text-gray-400">Template:</span> {study.template_name}
+                          <span className="text-gray-500">Template:</span> {study.template_name}
                         </span>
                       )}
                     </div>
 
                     <div className="mt-3 flex items-center gap-6 text-sm">
                       <div>
-                        <span className="text-gray-400">Sessions:</span>{' '}
+                        <span className="text-gray-500">Sessions:</span>{' '}
                         <span className="font-medium text-gray-700">{study.session_count || 0}</span>
                       </div>
                       <div>
-                        <span className="text-gray-400">Observations:</span>{' '}
+                        <span className="text-gray-500">Observations:</span>{' '}
                         <span className="font-medium text-gray-700">{study.observation_count || 0}</span>
                       </div>
                     </div>
 
-                    <p className="text-gray-400 text-xs mt-3">
+                    <p className="text-gray-500 text-xs mt-3">
                       Created: {study.created_at ? new Date(study.created_at).toLocaleDateString() : 'Unknown'}
                     </p>
                   </div>

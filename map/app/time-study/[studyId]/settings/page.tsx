@@ -362,7 +362,7 @@ export default function StudySettingsPage() {
                   {study.structure_type === 'simple' && 'Simple Timer'}
                   {study.structure_type === 'phases' && 'Phases (Contact Center)'}
                   {study.structure_type === 'segments' && 'Segments'}
-                  <span className="text-gray-400 ml-2">(cannot be changed)</span>
+                  <span className="text-gray-500 ml-2">(cannot be changed)</span>
                 </p>
               </div>
 
@@ -516,7 +516,7 @@ export default function StudySettingsPage() {
                   <button
                     onClick={() => handleDeleteOutcome(outcome.id)}
                     disabled={saving}
-                    className="text-gray-400 hover:text-red-600 disabled:opacity-50"
+                    className="text-gray-500 hover:text-red-600 disabled:opacity-50"
                   >
                     &times;
                   </button>

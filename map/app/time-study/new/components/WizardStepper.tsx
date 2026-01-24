@@ -36,7 +36,7 @@ export default function WizardStepper({ steps, currentStep }: WizardStepperProps
                   ml-2 text-sm font-medium hidden sm:inline
                   ${isCurrent ? 'text-blue-600' : ''}
                   ${isCompleted ? 'text-green-600' : ''}
-                  ${isUpcoming ? 'text-gray-400' : ''}
+                  ${isUpcoming ? 'text-gray-500' : ''}
                 `}
               >
                 {step}

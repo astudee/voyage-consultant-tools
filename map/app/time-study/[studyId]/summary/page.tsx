@@ -134,7 +134,7 @@ export default function StudySummaryPage() {
             {getStatusBadge(study.status)}
             <Link
               href={`/time-study/${studyId}/settings`}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-500 hover:text-gray-600"
               title="Study Settings"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -259,7 +259,7 @@ function OverviewTab({
               <p className="text-xl font-bold text-blue-600">
                 {formatDuration(contactCenterStats.avg_call_duration_seconds)}
               </p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 Med: {formatDuration(contactCenterStats.median_call_duration_seconds)}
               </p>
             </div>
@@ -268,7 +268,7 @@ function OverviewTab({
               <p className="text-xl font-bold text-orange-600">
                 {formatDuration(contactCenterStats.avg_acw_duration_seconds)}
               </p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 Med: {formatDuration(contactCenterStats.median_acw_duration_seconds)}
               </p>
             </div>
@@ -277,7 +277,7 @@ function OverviewTab({
               <p className="text-xl font-bold text-gray-900">
                 {formatDuration(contactCenterStats.avg_aht_seconds)}
               </p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 (Call + ACW)
               </p>
             </div>
@@ -288,7 +288,7 @@ function OverviewTab({
                   ? Math.round((contactCenterStats.observations_with_acw / summary.observation_count) * 100)
                   : 0}%
               </p>
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 {contactCenterStats.observations_with_acw} of {summary.observation_count}
               </p>
             </div>
@@ -433,7 +433,7 @@ function ActivitiesTab({ activitySummary }: { activitySummary: TimeStudyActivity
               <td className="px-4 py-3 text-sm text-gray-900">
                 {activity.activity_name}
                 {activity.is_adhoc && (
-                  <span className="ml-2 text-xs text-gray-400">(ad-hoc)</span>
+                  <span className="ml-2 text-xs text-gray-500">(ad-hoc)</span>
                 )}
               </td>
               <td className="px-4 py-3 text-sm text-center text-gray-600">

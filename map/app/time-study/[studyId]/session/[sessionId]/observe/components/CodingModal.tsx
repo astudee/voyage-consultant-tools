@@ -89,10 +89,10 @@ export default function CodingModal({
               <div className="space-y-1">
                 {recordedSteps.map((step, idx) => (
                   <div key={idx} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">
+                    <span className="text-gray-300">
                       {step.stepName}
                       {step.visitNumber > 1 && (
-                        <span className="text-gray-500 ml-1">(visit {step.visitNumber})</span>
+                        <span className="text-gray-400 ml-1">(visit {step.visitNumber})</span>
                       )}
                     </span>
                     <span className="font-mono text-gray-300">
@@ -127,7 +127,7 @@ export default function CodingModal({
             </select>
 
             <div className="mt-2">
-              <div className="text-xs text-gray-500 mb-1">Or describe an unplanned activity:</div>
+              <div className="text-xs text-gray-400 mb-1">Or describe an unplanned activity:</div>
               <input
                 type="text"
                 value={adhocActivityName}
@@ -222,7 +222,7 @@ export default function CodingModal({
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-gray-400 hover:text-white text-sm"
+              className="px-4 py-2 text-gray-300 hover:text-white text-sm"
               disabled={isSaving}
             >
               Discard

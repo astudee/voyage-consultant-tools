@@ -636,7 +636,7 @@ export default function ObservationPage() {
       <div className="h-full flex items-center justify-center bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
-          <p className="mt-4 text-gray-400">Loading session...</p>
+          <p className="mt-4 text-gray-300">Loading session...</p>
         </div>
       </div>
     );
@@ -667,7 +667,7 @@ export default function ObservationPage() {
         <div className="flex items-center gap-3">
           <Link
             href={`/time-study/${studyId}/summary`}
-            className="text-gray-400 hover:text-white"
+            className="text-gray-300 hover:text-white"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -675,7 +675,7 @@ export default function ObservationPage() {
           </Link>
           <div>
             <h1 className="text-sm font-semibold">{study.study_name}</h1>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-400">
               {session.observer_name}
               {session.observed_worker_name && ` → ${session.observed_worker_name}`}
             </p>
@@ -718,7 +718,7 @@ export default function ObservationPage() {
             {/* Timer Display */}
             <div
               className={`font-mono text-5xl tracking-wider mb-4 ${
-                isTimerRunning ? 'text-green-400' : 'text-gray-500'
+                isTimerRunning ? 'text-green-400' : 'text-gray-400'
               }`}
             >
               {formatDurationPrecise(elapsedSeconds)}
@@ -778,7 +778,7 @@ export default function ObservationPage() {
                               className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                                 isActive
                                   ? 'bg-blue-600 text-white border-2 border-blue-400'
-                                  : 'bg-transparent text-gray-400 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
+                                  : 'bg-transparent text-gray-300 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
                               }`}
                             >
                               {flag.flag_name}
@@ -797,7 +797,7 @@ export default function ObservationPage() {
                             ? 'bg-gray-600 text-white'
                             : showNoteInput
                             ? 'bg-gray-700 text-gray-300'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                            : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
                         }`}
                       >
                         {pendingNote ? '+ Note ●' : '+ Note'}
@@ -809,7 +809,7 @@ export default function ObservationPage() {
                             ? 'bg-purple-700 text-white'
                             : showOpportunityInput
                             ? 'bg-gray-700 text-gray-300'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                            : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
                         }`}
                       >
                         {pendingOpportunity ? '! Opportunity ●' : '! Opportunity'}
@@ -863,7 +863,7 @@ export default function ObservationPage() {
                     {/* Discard button */}
                     <button
                       onClick={handleDiscard}
-                      className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                      className="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors"
                     >
                       ✕ Discard
                     </button>
@@ -888,11 +888,11 @@ export default function ObservationPage() {
                     {isInACW && (
                       <div className="flex justify-center gap-4 mb-4 text-sm">
                         <div className="bg-gray-700 px-4 py-2 rounded-lg">
-                          <span className="text-gray-400">Call: </span>
+                          <span className="text-gray-300">Call: </span>
                           <span className="font-mono text-blue-400">{formatDuration(callDurationSeconds)}</span>
                         </div>
                         <div className="bg-gray-700 px-4 py-2 rounded-lg">
-                          <span className="text-gray-400">ACW: </span>
+                          <span className="text-gray-300">ACW: </span>
                           <span className="font-mono text-orange-400">{formatDurationPrecise(elapsedSeconds - callDurationSeconds)}</span>
                         </div>
                       </div>
@@ -970,7 +970,7 @@ export default function ObservationPage() {
                               className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                                 isActive
                                   ? 'bg-blue-600 text-white border-2 border-blue-400'
-                                  : 'bg-transparent text-gray-400 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
+                                  : 'bg-transparent text-gray-300 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
                               }`}
                             >
                               {flag.flag_name}
@@ -989,7 +989,7 @@ export default function ObservationPage() {
                             ? 'bg-gray-600 text-white'
                             : showNoteInput
                             ? 'bg-gray-700 text-gray-300'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                            : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
                         }`}
                       >
                         {pendingNote ? '+ Note ●' : '+ Note'}
@@ -1001,7 +1001,7 @@ export default function ObservationPage() {
                             ? 'bg-purple-700 text-white'
                             : showOpportunityInput
                             ? 'bg-gray-700 text-gray-300'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                            : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800'
                         }`}
                       >
                         {pendingOpportunity ? '! Opportunity ●' : '! Opportunity'}
@@ -1055,7 +1055,7 @@ export default function ObservationPage() {
                     {/* Discard button */}
                     <button
                       onClick={handleDiscard}
-                      className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                      className="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors"
                     >
                       ✕ Discard
                     </button>
@@ -1070,14 +1070,14 @@ export default function ObservationPage() {
         <div className="flex-1 overflow-auto">
           <div className="max-w-md mx-auto">
             {(!observations || observations.length === 0) ? (
-              <p className="text-gray-500 text-center py-8 text-sm">
+              <p className="text-gray-400 text-center py-8 text-sm">
                 {isTimerRunning ? 'Tap an outcome when done' : 'Tap Start to begin'}
               </p>
             ) : (
               <>
                 {/* Table Header - Different for Simple vs Phases */}
                 {isSimpleTimer ? (
-                  <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-900">
+                  <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-400 border-b border-gray-700 sticky top-0 bg-gray-900">
                     <div className="col-span-1">#</div>
                     <div className="col-span-3">Activity</div>
                     <div className="col-span-2">Duration</div>
@@ -1085,7 +1085,7 @@ export default function ObservationPage() {
                     <div className="col-span-4">Flags</div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-900">
+                  <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-400 border-b border-gray-700 sticky top-0 bg-gray-900">
                     <div className="col-span-1">#</div>
                     <div className="col-span-2">Call</div>
                     <div className="col-span-2">ACW</div>
@@ -1103,7 +1103,7 @@ export default function ObservationPage() {
                       onClick={() => handleEditObservation(obs)}
                       className={`w-full grid grid-cols-12 gap-1 px-3 py-2.5 hover:bg-gray-800 transition-colors text-left items-center`}
                     >
-                      <div className="col-span-1 text-gray-500 text-sm font-mono">
+                      <div className="col-span-1 text-gray-400 text-sm font-mono">
                         {obs.observation_number}
                       </div>
 
@@ -1157,7 +1157,7 @@ export default function ObservationPage() {
                           </span>
                         )}
                       </div>
-                      <div className={`${isSimpleTimer ? 'col-span-4' : 'col-span-3'} text-xs text-gray-400 truncate`}>
+                      <div className={`${isSimpleTimer ? 'col-span-4' : 'col-span-3'} text-xs text-gray-300 truncate`}>
                         {obs.flags && obs.flags.length > 0 ? (
                           <span className="text-blue-400">
                             {obs.flags.map(f => f.flag_name).join(', ')}
@@ -1169,7 +1169,7 @@ export default function ObservationPage() {
                 </div>
 
                 {/* Footer with totals and averages */}
-                <div className="border-t border-gray-700 px-3 py-2 text-xs text-gray-500 sticky bottom-0 bg-gray-900">
+                <div className="border-t border-gray-700 px-3 py-2 text-xs text-gray-400 sticky bottom-0 bg-gray-900">
                   {isSimpleTimer ? (
                     <span>{totalObservations} observation{totalObservations !== 1 ? 's' : ''} · {formatDuration(totalDuration)} total</span>
                   ) : (

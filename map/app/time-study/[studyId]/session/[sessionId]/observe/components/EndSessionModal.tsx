@@ -59,7 +59,7 @@ export default function EndSessionModal({
         {/* Header */}
         <div className="bg-gray-700 px-6 py-4 rounded-t-lg text-center">
           <h2 className="text-lg font-semibold text-white">End Session</h2>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-gray-300 mt-1">
             Final observation: <span className="font-mono text-green-400">{formatDurationPrecise(elapsedSeconds)}</span>
           </p>
         </div>
@@ -95,7 +95,7 @@ export default function EndSessionModal({
           {/* Flags */}
           {flags.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 mb-2">Flags</p>
+              <p className="text-xs text-gray-400 mb-2">Flags</p>
               <div className="flex flex-wrap gap-2 justify-center">
                 {flags.map((flag) => {
                   const isActive = activeFlags.includes(flag.id);
@@ -107,7 +107,7 @@ export default function EndSessionModal({
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all disabled:opacity-50 ${
                         isActive
                           ? 'bg-blue-600 text-white border-2 border-blue-400'
-                          : 'bg-transparent text-gray-400 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
+                          : 'bg-transparent text-gray-300 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
                       }`}
                     >
                       {flag.flag_name}
@@ -120,7 +120,7 @@ export default function EndSessionModal({
 
           {/* Note */}
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Note</label>
+            <label className="text-xs text-gray-400 block mb-1">Note</label>
             <input
               type="text"
               value={note}
@@ -133,7 +133,7 @@ export default function EndSessionModal({
 
           {/* Opportunity */}
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Improvement Opportunity</label>
+            <label className="text-xs text-gray-400 block mb-1">Improvement Opportunity</label>
             <input
               type="text"
               value={opportunity}
@@ -148,7 +148,7 @@ export default function EndSessionModal({
           <button
             onClick={() => handleOutcomeClick(null)}
             disabled={isSaving}
-            className="w-full py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-700 transition-colors disabled:opacity-50"
+            className="w-full py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 transition-colors disabled:opacity-50"
           >
             Discard & End
           </button>
@@ -157,7 +157,7 @@ export default function EndSessionModal({
           <button
             onClick={onCancel}
             disabled={isSaving}
-            className="w-full py-2 text-gray-500 hover:text-gray-300 text-sm transition-colors disabled:opacity-50"
+            className="w-full py-2 text-gray-400 hover:text-gray-300 text-sm transition-colors disabled:opacity-50"
           >
             Continue Observing
           </button>
