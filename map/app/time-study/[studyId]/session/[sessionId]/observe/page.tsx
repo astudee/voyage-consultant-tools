@@ -470,7 +470,12 @@ export default function ObservationPage() {
     }
   };
 
-  const handleEndSessionWithOutcome = async (outcomeId: number | null) => {
+  const handleEndSessionWithOutcome = async (data: {
+    outcomeId: number | null;
+    flagIds: number[];
+    notes: string;
+    opportunity: string;
+  }) => {
     if (!timerStartedAt || !sessionData) {
       await endSessionDirectly();
       return;
@@ -480,7 +485,7 @@ export default function ObservationPage() {
 
     try {
       // Log final observation if outcome selected
-      if (outcomeId !== null) {
+      if (data.outcomeId !== null) {
         const endedAt = new Date().toISOString();
         const observationNumber = (sessionData.observations?.length || 0) + 1;
         const totalDurationSeconds = Math.floor(elapsedSeconds);
@@ -495,10 +500,10 @@ export default function ObservationPage() {
             started_at: timerStartedAt,
             ended_at: endedAt,
             total_duration_seconds: totalDurationSeconds,
-            outcome_id: outcomeId,
-            notes: null,
-            opportunity: null,
-            flag_ids: [],
+            outcome_id: data.outcomeId,
+            notes: data.notes || null,
+            opportunity: data.opportunity || null,
+            flag_ids: data.flagIds,
             steps: [],
           }),
         });
@@ -986,7 +991,11 @@ export default function ObservationPage() {
       {showEndSessionModal && (
         <EndSessionModal
           outcomes={outcomes}
+          flags={flags}
           elapsedSeconds={elapsedSeconds}
+          initialActiveFlags={activeFlags}
+          initialNote={pendingNote}
+          initialOpportunity={pendingOpportunity}
           onSelectOutcome={handleEndSessionWithOutcome}
           onCancel={() => setShowEndSessionModal(false)}
           isSaving={savingObservation}
