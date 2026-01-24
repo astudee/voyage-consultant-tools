@@ -144,6 +144,8 @@ export interface TimeStudyObservation {
   started_at: string;
   ended_at: string | null;
   total_duration_seconds: number | null;
+  call_duration_seconds: number | null;  // For Contact Center: talk time
+  acw_duration_seconds: number | null;   // For Contact Center: after call work
   outcome_id: number | null;
   outcome_name?: string | null;
   notes: string | null;
@@ -160,6 +162,8 @@ export interface TimeStudyObservationInput {
   started_at: string;
   ended_at?: string | null;
   total_duration_seconds?: number | null;
+  call_duration_seconds?: number | null;  // For Contact Center: talk time
+  acw_duration_seconds?: number | null;   // For Contact Center: after call work
   outcome_id?: number | null;
   notes?: string | null;
   opportunity?: string | null;

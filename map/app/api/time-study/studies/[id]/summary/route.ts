@@ -7,6 +7,7 @@ import {
   getStudyOpportunities,
   getStudyDispositionBreakdown,
   getStudy,
+  getContactCenterStats,
 } from '@/lib/snowflake-time-study';
 
 export async function GET(
@@ -48,8 +49,14 @@ export async function GET(
 
     // Only get step summary for phases/segments studies
     let stepSummary = null;
+    let contactCenterStats = null;
     if (study.structure_type !== 'simple') {
       stepSummary = await getStudyStepSummary(studyId);
+      // Get contact center stats for phases studies
+      if (study.structure_type === 'phases') {
+        contactCenterStats = await getContactCenterStats(studyId);
+        console.log(`[Summary API] contactCenterStats:`, JSON.stringify(contactCenterStats));
+      }
     }
 
     const response = {
@@ -60,6 +67,7 @@ export async function GET(
       flagSummary,
       opportunities,
       dispositionBreakdown,
+      contactCenterStats,
     };
     console.log(`[Summary API] Returning response with summary.observation_count: ${summary?.observation_count}`);
 

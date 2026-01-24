@@ -86,7 +86,12 @@ export default function ObservationPage() {
   const [pendingNote, setPendingNote] = useState('');
   const [pendingOpportunity, setPendingOpportunity] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
-  const [showOpportunityInput, setShowOpportunityInput] = useState(false)
+  const [showOpportunityInput, setShowOpportunityInput] = useState(false);
+
+  // ACW state (for phases/contact center)
+  const [isInACW, setIsInACW] = useState(false);
+  const [callEndedAt, setCallEndedAt] = useState<string | null>(null);
+  const [callDurationSeconds, setCallDurationSeconds] = useState<number>(0)
 
   // Fetch study and session data
   useEffect(() => {
@@ -182,6 +187,20 @@ export default function ObservationPage() {
       const observationNumber = (sessionData.observations?.length || 0) + 1;
       const totalDurationSeconds = Math.floor(elapsedSeconds);
 
+      // Calculate call and ACW durations for phases mode
+      let callDuration: number | null = null;
+      let acwDuration: number | null = null;
+
+      if (isInACW && callEndedAt) {
+        // In ACW mode: call duration was locked, ACW is time since then
+        callDuration = callDurationSeconds;
+        acwDuration = totalDurationSeconds - callDurationSeconds;
+      } else if (studyData.study.structure_type === 'phases') {
+        // Phases mode but no ACW: all time is call time
+        callDuration = totalDurationSeconds;
+        acwDuration = null;
+      }
+
       // Find outcome name for optimistic update
       const outcome = studyData.outcomes.find((o) => o.id === outcomeId);
       const selectedActivity = studyData.activities.find((a) => a.id === selectedActivityId);
@@ -205,6 +224,8 @@ export default function ObservationPage() {
         started_at: timerStartedAt,
         ended_at: endedAt,
         total_duration_seconds: totalDurationSeconds,
+        call_duration_seconds: callDuration,
+        acw_duration_seconds: acwDuration,
         outcome_id: outcomeId,
         outcome_name: outcome?.outcome_name || null,
         notes: noteToSave,
@@ -230,6 +251,11 @@ export default function ObservationPage() {
       setShowNoteInput(false);
       setShowOpportunityInput(false);
 
+      // Reset ACW state
+      setIsInACW(false);
+      setCallEndedAt(null);
+      setCallDurationSeconds(0);
+
       // Now do the actual API call in background
       setSavingObservation(true);
       setError(null);
@@ -242,6 +268,8 @@ export default function ObservationPage() {
           started_at: timerStartedAt,
           ended_at: endedAt,
           total_duration_seconds: totalDurationSeconds,
+          call_duration_seconds: callDuration,
+          acw_duration_seconds: acwDuration,
           outcome_id: outcomeId,
           notes: noteToSave,
           opportunity: opportunityToSave,
@@ -290,7 +318,7 @@ export default function ObservationPage() {
         setSavingObservation(false);
       }
     },
-    [timerStartedAt, studyData, sessionData, sessionId, selectedActivityId, elapsedSeconds, savingObservation]
+    [timerStartedAt, studyData, sessionData, sessionId, selectedActivityId, elapsedSeconds, savingObservation, isInACW, callEndedAt, callDurationSeconds, activeFlags, pendingNote, pendingOpportunity]
   );
 
   // Discard - reset timer without logging
@@ -300,7 +328,22 @@ export default function ObservationPage() {
     setElapsedSeconds(0);
     setRecordedSteps([]);
     setActiveStep(null);
+    setIsInACW(false);
+    setCallEndedAt(null);
+    setCallDurationSeconds(0);
   }, []);
+
+  // Add ACW - locks call time and starts ACW tracking
+  const handleAddACW = useCallback(() => {
+    if (!isTimerRunning || !timerStartedAt) return;
+
+    const now = new Date().toISOString();
+    const callDuration = Math.floor(elapsedSeconds);
+
+    setCallEndedAt(now);
+    setCallDurationSeconds(callDuration);
+    setIsInACW(true);
+  }, [isTimerRunning, timerStartedAt, elapsedSeconds]);
 
   // Stop timer for phases/segments (opens modal)
   const stopTimerForCoding = useCallback(() => {
@@ -565,12 +608,28 @@ export default function ObservationPage() {
     }
   };
 
-  // Calculate totals
+  // Calculate totals and averages
   const totalObservations = sessionData?.observations?.length || 0;
   const totalDuration = sessionData?.observations?.reduce(
     (sum, obs) => sum + (obs.total_duration_seconds || 0),
     0
   ) || 0;
+
+  // Calculate Contact Center averages (for phases mode)
+  const observationsWithCall = sessionData?.observations?.filter(obs => obs.call_duration_seconds != null) || [];
+  const observationsWithACW = sessionData?.observations?.filter(obs => obs.acw_duration_seconds != null) || [];
+
+  const avgCallDuration = observationsWithCall.length > 0
+    ? observationsWithCall.reduce((sum, obs) => sum + (obs.call_duration_seconds || 0), 0) / observationsWithCall.length
+    : null;
+
+  const avgACWDuration = observationsWithACW.length > 0
+    ? observationsWithACW.reduce((sum, obs) => sum + (obs.acw_duration_seconds || 0), 0) / observationsWithACW.length
+    : null;
+
+  const avgAHT = totalObservations > 0
+    ? totalDuration / totalObservations
+    : null;
 
   if (loading) {
     return (
@@ -810,62 +869,194 @@ export default function ObservationPage() {
               </>
             )}
 
-            {/* Phases/Segments: Start/Stop + Steps */}
+            {/* Phases/Segments: Contact Center style with ACW */}
             {!isSimpleTimer && (
               <>
-                <div className="flex justify-center gap-4 mb-4">
-                  {!isTimerRunning ? (
-                    <button
-                      onClick={startTimer}
-                      className="flex items-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-lg font-semibold transition-colors"
-                    >
-                      ▶ Start
-                    </button>
-                  ) : (
-                    <button
-                      onClick={stopTimerForCoding}
-                      className="flex items-center gap-2 px-8 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-lg font-semibold transition-colors"
-                    >
-                      ■ Stop & Code
-                    </button>
-                  )}
-                </div>
+                {!isTimerRunning ? (
+                  <button
+                    onClick={startTimer}
+                    className="w-full py-4 bg-green-600 hover:bg-green-500 rounded-lg text-xl font-semibold transition-colors mb-3"
+                  >
+                    ▶ Start
+                  </button>
+                ) : (
+                  <>
+                    {/* Call/ACW Time Display */}
+                    {isInACW && (
+                      <div className="flex justify-center gap-4 mb-4 text-sm">
+                        <div className="bg-gray-700 px-4 py-2 rounded-lg">
+                          <span className="text-gray-400">Call: </span>
+                          <span className="font-mono text-blue-400">{formatDuration(callDurationSeconds)}</span>
+                        </div>
+                        <div className="bg-gray-700 px-4 py-2 rounded-lg">
+                          <span className="text-gray-400">ACW: </span>
+                          <span className="font-mono text-orange-400">{formatDurationPrecise(elapsedSeconds - callDurationSeconds)}</span>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Steps UI */}
-                {steps.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs text-gray-500 mb-2">
-                      {study.structure_type === 'phases' ? 'Phases' : 'Segments'}
-                    </p>
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {steps.map((step) => {
-                        const isActive = activeStep?.stepId === step.id;
-                        const completedVisits = recordedSteps.filter((rs) => rs.stepId === step.id).length;
+                    {/* Activity selector for phases with multiple activities */}
+                    {activeActivities.length > 1 && (
+                      <div className="mb-3">
+                        <select
+                          value={selectedActivityId || ''}
+                          onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : null)}
+                          className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                        >
+                          <option value="">Select activity</option>
+                          {activeActivities.map((activity) => (
+                            <option key={activity.id} value={activity.id}>
+                              {activity.activity_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
-                        return (
-                          <button
-                            key={step.id}
-                            onClick={() => switchStep(step)}
-                            disabled={!isTimerRunning}
-                            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors relative ${
-                              isActive
-                                ? 'bg-blue-600 text-white'
-                                : isTimerRunning
-                                ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                                : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                            }`}
-                          >
-                            {step.step_name}
-                            {completedVisits > 0 && (
-                              <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
-                                {completedVisits}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
+                    {/* Outcome buttons */}
+                    <div className="flex flex-wrap gap-2 justify-center mb-3">
+                      {outcomes.map((outcome) => (
+                        <button
+                          key={outcome.id}
+                          onClick={() => handleQuickLog(outcome.id)}
+                          disabled={savingObservation || (!selectedActivityId && activeActivities.length > 1)}
+                          className={`px-6 py-3 rounded-lg text-lg font-semibold transition-all duration-150 disabled:opacity-50 active:scale-95 ${
+                            savingObservation ? 'opacity-70 cursor-wait' : ''
+                          } ${
+                            outcome.outcome_name === 'Complete'
+                              ? 'bg-green-600 hover:bg-green-500 active:bg-green-700'
+                              : outcome.outcome_name === 'Transferred'
+                              ? 'bg-yellow-600 hover:bg-yellow-500 active:bg-yellow-700'
+                              : outcome.outcome_name === 'Pended'
+                              ? 'bg-orange-600 hover:bg-orange-500 active:bg-orange-700'
+                              : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700'
+                          }`}
+                        >
+                          {savingObservation ? '...' : outcome.outcome_name}
+                        </button>
+                      ))}
                     </div>
-                  </div>
+
+                    {/* Add ACW Button - only show when not already in ACW */}
+                    {!isInACW && (
+                      <div className="mb-3">
+                        <button
+                          onClick={handleAddACW}
+                          className="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm font-medium transition-colors"
+                        >
+                          + Add ACW
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Inline Flag Toggles */}
+                    {flags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-center mb-3">
+                        {flags.map((flag) => {
+                          const isActive = activeFlags.includes(flag.id);
+                          return (
+                            <button
+                              key={flag.id}
+                              onClick={() => {
+                                setActiveFlags(prev =>
+                                  isActive
+                                    ? prev.filter(id => id !== flag.id)
+                                    : [...prev, flag.id]
+                                );
+                              }}
+                              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                isActive
+                                  ? 'bg-blue-600 text-white border-2 border-blue-400'
+                                  : 'bg-transparent text-gray-400 border-2 border-gray-600 hover:border-gray-500 hover:text-gray-300'
+                              }`}
+                            >
+                              {flag.flag_name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Quick Note & Opportunity Buttons */}
+                    <div className="flex justify-center gap-3 mb-3">
+                      <button
+                        onClick={() => setShowNoteInput(!showNoteInput)}
+                        className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                          pendingNote
+                            ? 'bg-gray-600 text-white'
+                            : showNoteInput
+                            ? 'bg-gray-700 text-gray-300'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                        }`}
+                      >
+                        {pendingNote ? '+ Note ●' : '+ Note'}
+                      </button>
+                      <button
+                        onClick={() => setShowOpportunityInput(!showOpportunityInput)}
+                        className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                          pendingOpportunity
+                            ? 'bg-purple-700 text-white'
+                            : showOpportunityInput
+                            ? 'bg-gray-700 text-gray-300'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                        }`}
+                      >
+                        {pendingOpportunity ? '! Opportunity ●' : '! Opportunity'}
+                      </button>
+                    </div>
+
+                    {/* Note Input */}
+                    {showNoteInput && (
+                      <div className="mb-3">
+                        <input
+                          type="text"
+                          value={pendingNote}
+                          onChange={(e) => setPendingNote(e.target.value)}
+                          placeholder="Add note for this observation..."
+                          className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setShowNoteInput(false);
+                            } else if (e.key === 'Escape') {
+                              setPendingNote('');
+                              setShowNoteInput(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Opportunity Input */}
+                    {showOpportunityInput && (
+                      <div className="mb-3">
+                        <input
+                          type="text"
+                          value={pendingOpportunity}
+                          onChange={(e) => setPendingOpportunity(e.target.value)}
+                          placeholder="Improvement opportunity..."
+                          className="w-full bg-gray-700 border border-purple-600 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setShowOpportunityInput(false);
+                            } else if (e.key === 'Escape') {
+                              setPendingOpportunity('');
+                              setShowOpportunityInput(false);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Discard button */}
+                    <button
+                      onClick={handleDiscard}
+                      className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                    >
+                      ✕ Discard
+                    </button>
+                  </>
                 )}
               </>
             )}
@@ -881,14 +1072,25 @@ export default function ObservationPage() {
               </p>
             ) : (
               <>
-                {/* Table Header */}
-                <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-900">
-                  <div className="col-span-1">#</div>
-                  <div className="col-span-3">Activity</div>
-                  <div className="col-span-2">Duration</div>
-                  <div className="col-span-2">Outcome</div>
-                  <div className="col-span-4">Flags</div>
-                </div>
+                {/* Table Header - Different for Simple vs Phases */}
+                {isSimpleTimer ? (
+                  <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-900">
+                    <div className="col-span-1">#</div>
+                    <div className="col-span-3">Activity</div>
+                    <div className="col-span-2">Duration</div>
+                    <div className="col-span-2">Outcome</div>
+                    <div className="col-span-4">Flags</div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-12 gap-1 px-3 py-2 text-xs text-gray-500 border-b border-gray-700 sticky top-0 bg-gray-900">
+                    <div className="col-span-1">#</div>
+                    <div className="col-span-2">Call</div>
+                    <div className="col-span-2">ACW</div>
+                    <div className="col-span-2">AHT</div>
+                    <div className="col-span-2">Outcome</div>
+                    <div className="col-span-3">Flags</div>
+                  </div>
+                )}
 
                 {/* Observation Rows */}
                 <div className="divide-y divide-gray-800">
@@ -896,22 +1098,45 @@ export default function ObservationPage() {
                     <button
                       key={obs.id}
                       onClick={() => handleEditObservation(obs)}
-                      className="w-full grid grid-cols-12 gap-1 px-3 py-2.5 hover:bg-gray-800 transition-colors text-left items-center"
+                      className={`w-full grid grid-cols-12 gap-1 px-3 py-2.5 hover:bg-gray-800 transition-colors text-left items-center`}
                     >
                       <div className="col-span-1 text-gray-500 text-sm font-mono">
                         {obs.observation_number}
                       </div>
-                      <div className="col-span-3 text-xs text-gray-300 truncate flex items-center gap-1">
-                        <span className="truncate">
-                          {obs.activity_name || obs.adhoc_activity_name || '—'}
-                        </span>
-                        {(obs.notes || obs.opportunity) && (
-                          <span className="text-gray-600 flex-shrink-0">✎</span>
-                        )}
-                      </div>
-                      <div className="col-span-2 font-mono text-sm text-gray-300">
-                        {formatDuration(obs.total_duration_seconds)}
-                      </div>
+
+                      {isSimpleTimer ? (
+                        <>
+                          {/* Simple Timer Row */}
+                          <div className="col-span-3 text-xs text-gray-300 truncate flex items-center gap-1">
+                            <span className="truncate">
+                              {obs.activity_name || obs.adhoc_activity_name || '—'}
+                            </span>
+                            {(obs.notes || obs.opportunity) && (
+                              <span className="text-gray-600 flex-shrink-0">✎</span>
+                            )}
+                          </div>
+                          <div className="col-span-2 font-mono text-sm text-gray-300">
+                            {formatDuration(obs.total_duration_seconds)}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Contact Center Row - Call/ACW/AHT */}
+                          <div className="col-span-2 font-mono text-xs text-blue-400">
+                            {formatDuration(obs.call_duration_seconds)}
+                          </div>
+                          <div className="col-span-2 font-mono text-xs text-orange-400">
+                            {obs.acw_duration_seconds != null ? formatDuration(obs.acw_duration_seconds) : '—'}
+                          </div>
+                          <div className="col-span-2 font-mono text-xs text-gray-300 flex items-center gap-1">
+                            {formatDuration(obs.total_duration_seconds)}
+                            {(obs.notes || obs.opportunity) && (
+                              <span className="text-gray-600 flex-shrink-0">✎</span>
+                            )}
+                          </div>
+                        </>
+                      )}
+
                       <div className="col-span-2">
                         {obs.outcome_name && (
                           <span
@@ -929,7 +1154,7 @@ export default function ObservationPage() {
                           </span>
                         )}
                       </div>
-                      <div className="col-span-4 text-xs text-gray-400 truncate">
+                      <div className={`${isSimpleTimer ? 'col-span-4' : 'col-span-3'} text-xs text-gray-400 truncate`}>
                         {obs.flags && obs.flags.length > 0 ? (
                           <span className="text-blue-400">
                             {obs.flags.map(f => f.flag_name).join(', ')}
@@ -940,9 +1165,18 @@ export default function ObservationPage() {
                   ))}
                 </div>
 
-                {/* Footer with totals */}
+                {/* Footer with totals and averages */}
                 <div className="border-t border-gray-700 px-3 py-2 text-xs text-gray-500 sticky bottom-0 bg-gray-900">
-                  {totalObservations} observation{totalObservations !== 1 ? 's' : ''} · {formatDuration(totalDuration)} total
+                  {isSimpleTimer ? (
+                    <span>{totalObservations} observation{totalObservations !== 1 ? 's' : ''} · {formatDuration(totalDuration)} total</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span>{totalObservations} obs</span>
+                      <span>Avg Call: <span className="text-blue-400 font-mono">{avgCallDuration != null ? formatDuration(avgCallDuration) : '--'}</span></span>
+                      <span>Avg ACW: <span className="text-orange-400 font-mono">{avgACWDuration != null ? formatDuration(avgACWDuration) : '--'}</span></span>
+                      <span>AHT: <span className="text-gray-300 font-mono">{avgAHT != null ? formatDuration(avgAHT) : '--'}</span></span>
+                    </div>
+                  )}
                 </div>
               </>
             )}

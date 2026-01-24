@@ -12,12 +12,26 @@ import type {
 } from '@/lib/time-study-types';
 import { formatDuration } from '@/lib/time-study-types';
 
+interface ContactCenterStats {
+  avg_call_duration_seconds: number | null;
+  median_call_duration_seconds: number | null;
+  min_call_duration_seconds: number | null;
+  max_call_duration_seconds: number | null;
+  avg_acw_duration_seconds: number | null;
+  median_acw_duration_seconds: number | null;
+  min_acw_duration_seconds: number | null;
+  max_acw_duration_seconds: number | null;
+  observations_with_acw: number;
+  avg_aht_seconds: number | null;
+}
+
 interface SummaryData {
   study: TimeStudy;
   summary: TimeStudySummary | null;
   activitySummary: TimeStudyActivitySummary[];
   stepSummary: TimeStudyStepSummary[];
   sessions: TimeStudySession[];
+  contactCenterStats: ContactCenterStats | null;
 }
 
 export default function StudySummaryPage() {
@@ -53,6 +67,7 @@ export default function StudySummaryPage() {
           activitySummary: summaryData.activitySummary || [],
           stepSummary: summaryData.stepSummary || [],
           sessions: sessionsData.sessions || [],
+          contactCenterStats: summaryData.contactCenterStats || null,
         });
         setLoading(false);
       })
@@ -161,7 +176,7 @@ export default function StudySummaryPage() {
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto">
           {activeTab === 'overview' && (
-            <OverviewTab study={study} summary={summary} />
+            <OverviewTab study={study} summary={summary} contactCenterStats={data.contactCenterStats} />
           )}
           {activeTab === 'activities' && (
             <ActivitiesTab activitySummary={activitySummary} />
@@ -181,10 +196,14 @@ export default function StudySummaryPage() {
 function OverviewTab({
   study,
   summary,
+  contactCenterStats,
 }: {
   study: TimeStudy;
   summary: TimeStudySummary | null;
+  contactCenterStats: ContactCenterStats | null;
 }) {
+  const isContactCenter = study.structure_type === 'phases';
+
   if (!summary) {
     return (
       <div className="text-center py-12 text-gray-500">
@@ -211,39 +230,121 @@ function OverviewTab({
           <p className="text-2xl font-bold text-gray-900">{summary.observation_count}</p>
         </div>
         <div className="bg-white rounded-lg p-4 border border-gray-200">
-          <p className="text-sm text-gray-500">Avg Duration</p>
+          <p className="text-sm text-gray-500">{isContactCenter ? 'Avg AHT' : 'Avg Duration'}</p>
           <p className="text-2xl font-bold text-gray-900">
             {formatDuration(summary.avg_duration_seconds)}
           </p>
         </div>
       </div>
 
-      {/* Duration Stats */}
-      <div className="bg-white rounded-lg p-6 border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Duration Statistics</h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div>
-            <p className="text-sm text-gray-500">Average</p>
-            <p className="text-lg font-medium">{formatDuration(summary.avg_duration_seconds)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Median</p>
-            <p className="text-lg font-medium">{formatDuration(summary.median_duration_seconds)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Minimum</p>
-            <p className="text-lg font-medium">{formatDuration(summary.min_duration_seconds)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Maximum</p>
-            <p className="text-lg font-medium">{formatDuration(summary.max_duration_seconds)}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Std Dev</p>
-            <p className="text-lg font-medium">{formatDuration(summary.stddev_duration_seconds)}</p>
+      {/* Contact Center Metrics */}
+      {isContactCenter && contactCenterStats && (
+        <div className="bg-white rounded-lg p-6 border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Contact Center Metrics</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <p className="text-sm text-gray-500">Avg Call Time</p>
+              <p className="text-xl font-bold text-blue-600">
+                {formatDuration(contactCenterStats.avg_call_duration_seconds)}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Med: {formatDuration(contactCenterStats.median_call_duration_seconds)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Avg ACW</p>
+              <p className="text-xl font-bold text-orange-600">
+                {formatDuration(contactCenterStats.avg_acw_duration_seconds)}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Med: {formatDuration(contactCenterStats.median_acw_duration_seconds)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Avg AHT</p>
+              <p className="text-xl font-bold text-gray-900">
+                {formatDuration(contactCenterStats.avg_aht_seconds)}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                (Call + ACW)
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">ACW Rate</p>
+              <p className="text-xl font-bold text-gray-900">
+                {summary.observation_count > 0
+                  ? Math.round((contactCenterStats.observations_with_acw / summary.observation_count) * 100)
+                  : 0}%
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {contactCenterStats.observations_with_acw} of {summary.observation_count}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Duration Stats - Only show for non-contact center studies */}
+      {!isContactCenter && (
+        <div className="bg-white rounded-lg p-6 border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Duration Statistics</h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div>
+              <p className="text-sm text-gray-500">Average</p>
+              <p className="text-lg font-medium">{formatDuration(summary.avg_duration_seconds)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Median</p>
+              <p className="text-lg font-medium">{formatDuration(summary.median_duration_seconds)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Minimum</p>
+              <p className="text-lg font-medium">{formatDuration(summary.min_duration_seconds)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Maximum</p>
+              <p className="text-lg font-medium">{formatDuration(summary.max_duration_seconds)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Std Dev</p>
+              <p className="text-lg font-medium">{formatDuration(summary.stddev_duration_seconds)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Call Time Range for Contact Center */}
+      {isContactCenter && contactCenterStats && (
+        <div className="bg-white rounded-lg p-6 border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Call Time Range</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-sm text-gray-500">Min Call</p>
+              <p className="text-lg font-medium font-mono text-blue-600">
+                {formatDuration(contactCenterStats.min_call_duration_seconds)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Max Call</p>
+              <p className="text-lg font-medium font-mono text-blue-600">
+                {formatDuration(contactCenterStats.max_call_duration_seconds)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Min ACW</p>
+              <p className="text-lg font-medium font-mono text-orange-600">
+                {formatDuration(contactCenterStats.min_acw_duration_seconds)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Max ACW</p>
+              <p className="text-lg font-medium font-mono text-orange-600">
+                {formatDuration(contactCenterStats.max_acw_duration_seconds)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Date Range */}
       <div className="bg-white rounded-lg p-6 border border-gray-200">

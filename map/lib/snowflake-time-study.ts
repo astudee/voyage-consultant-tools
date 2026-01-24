@@ -617,6 +617,7 @@ export async function getSessionObservations(sessionId: number): Promise<TimeStu
       COALESCE(sa.activity_name, o.adhoc_activity_name) as activity_name,
       o.adhoc_activity_name, o.observation_number,
       o.started_at, o.ended_at, o.total_duration_seconds,
+      o.call_duration_seconds, o.acw_duration_seconds,
       o.outcome_id, oc.outcome_name,
       o.notes, o.opportunity, o.created_at
     FROM time_study_observations o
@@ -638,6 +639,8 @@ export async function getSessionObservations(sessionId: number): Promise<TimeStu
     started_at: row.STARTED_AT as string,
     ended_at: row.ENDED_AT as string | null,
     total_duration_seconds: row.TOTAL_DURATION_SECONDS as number | null,
+    call_duration_seconds: row.CALL_DURATION_SECONDS as number | null,
+    acw_duration_seconds: row.ACW_DURATION_SECONDS as number | null,
     outcome_id: row.OUTCOME_ID as number | null,
     outcome_name: row.OUTCOME_NAME as string | null,
     notes: row.NOTES as string | null,
@@ -653,6 +656,7 @@ export async function getObservation(observationId: number): Promise<TimeStudyOb
       COALESCE(sa.activity_name, o.adhoc_activity_name) as activity_name,
       o.adhoc_activity_name, o.observation_number,
       o.started_at, o.ended_at, o.total_duration_seconds,
+      o.call_duration_seconds, o.acw_duration_seconds,
       o.outcome_id, oc.outcome_name,
       o.notes, o.opportunity, o.created_at
     FROM time_study_observations o
@@ -675,6 +679,8 @@ export async function getObservation(observationId: number): Promise<TimeStudyOb
     started_at: row.STARTED_AT as string,
     ended_at: row.ENDED_AT as string | null,
     total_duration_seconds: row.TOTAL_DURATION_SECONDS as number | null,
+    call_duration_seconds: row.CALL_DURATION_SECONDS as number | null,
+    acw_duration_seconds: row.ACW_DURATION_SECONDS as number | null,
     outcome_id: row.OUTCOME_ID as number | null,
     outcome_name: row.OUTCOME_NAME as string | null,
     notes: row.NOTES as string | null,
@@ -699,8 +705,8 @@ export async function createObservation(sessionId: number, data: TimeStudyObserv
 
   const sql = `
     INSERT INTO time_study_observations
-    (id, session_id, study_activity_id, adhoc_activity_name, observation_number, started_at, ended_at, total_duration_seconds, outcome_id, notes, opportunity)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, session_id, study_activity_id, adhoc_activity_name, observation_number, started_at, ended_at, total_duration_seconds, call_duration_seconds, acw_duration_seconds, outcome_id, notes, opportunity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   await executeQuery(sql, [
@@ -712,6 +718,8 @@ export async function createObservation(sessionId: number, data: TimeStudyObserv
     data.started_at,
     data.ended_at || null,
     data.total_duration_seconds || null,
+    data.call_duration_seconds || null,
+    data.acw_duration_seconds || null,
     data.outcome_id || null,
     data.notes || null,
     data.opportunity || null,
@@ -749,6 +757,14 @@ export async function updateObservation(observationId: number, data: Partial<Tim
   if (data.total_duration_seconds !== undefined) {
     updates.push('total_duration_seconds = ?');
     values.push(data.total_duration_seconds);
+  }
+  if (data.call_duration_seconds !== undefined) {
+    updates.push('call_duration_seconds = ?');
+    values.push(data.call_duration_seconds);
+  }
+  if (data.acw_duration_seconds !== undefined) {
+    updates.push('acw_duration_seconds = ?');
+    values.push(data.acw_duration_seconds);
   }
   if (data.outcome_id !== undefined) {
     updates.push('outcome_id = ?');
@@ -905,6 +921,8 @@ export interface StudyObservationRow {
   started_at: string;
   ended_at: string | null;
   total_duration_seconds: number | null;
+  call_duration_seconds: number | null;
+  acw_duration_seconds: number | null;
   outcome_id: number | null;
   outcome_name: string | null;
   notes: string | null;
@@ -925,6 +943,7 @@ export async function getStudyObservations(studyId: number): Promise<StudyObserv
       COALESCE(sa.activity_name, o.adhoc_activity_name) as activity_name,
       o.adhoc_activity_name, o.observation_number,
       o.started_at, o.ended_at, o.total_duration_seconds,
+      o.call_duration_seconds, o.acw_duration_seconds,
       o.outcome_id, oc.outcome_name,
       o.notes, o.opportunity, o.created_at
     FROM time_study_observations o
@@ -975,6 +994,8 @@ export async function getStudyObservations(studyId: number): Promise<StudyObserv
       started_at: row.STARTED_AT as string,
       ended_at: row.ENDED_AT as string | null,
       total_duration_seconds: row.TOTAL_DURATION_SECONDS as number | null,
+      call_duration_seconds: row.CALL_DURATION_SECONDS as number | null,
+      acw_duration_seconds: row.ACW_DURATION_SECONDS as number | null,
       outcome_id: row.OUTCOME_ID as number | null,
       outcome_name: row.OUTCOME_NAME as string | null,
       notes: row.NOTES as string | null,
@@ -994,6 +1015,8 @@ export async function createStudyObservation(studyId: number, data: {
   started_at: string;
   ended_at?: string | null;
   total_duration_seconds?: number | null;
+  call_duration_seconds?: number | null;
+  acw_duration_seconds?: number | null;
   outcome_id?: number | null;
   notes?: string | null;
   opportunity?: string | null;
@@ -1013,8 +1036,8 @@ export async function createStudyObservation(studyId: number, data: {
 
   const sql = `
     INSERT INTO time_study_observations
-    (id, session_id, study_activity_id, adhoc_activity_name, observation_number, started_at, ended_at, total_duration_seconds, outcome_id, notes, opportunity)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, session_id, study_activity_id, adhoc_activity_name, observation_number, started_at, ended_at, total_duration_seconds, call_duration_seconds, acw_duration_seconds, outcome_id, notes, opportunity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   await executeQuery(sql, [
@@ -1026,6 +1049,8 @@ export async function createStudyObservation(studyId: number, data: {
     data.started_at,
     data.ended_at || null,
     data.total_duration_seconds || null,
+    data.call_duration_seconds || null,
+    data.acw_duration_seconds || null,
     data.outcome_id || null,
     data.notes || null,
     data.opportunity || null,
@@ -1097,6 +1122,56 @@ export async function getStudySummary(studyId: number): Promise<TimeStudySummary
     stddev_duration_seconds: statsRow.STDDEV_DURATION_SECONDS as number | null,
     first_session_date: statsRow.FIRST_SESSION_DATE as string | null,
     last_session_date: statsRow.LAST_SESSION_DATE as string | null,
+  };
+}
+
+// Contact Center specific stats (for phases studies)
+export interface ContactCenterStats {
+  avg_call_duration_seconds: number | null;
+  median_call_duration_seconds: number | null;
+  min_call_duration_seconds: number | null;
+  max_call_duration_seconds: number | null;
+  avg_acw_duration_seconds: number | null;
+  median_acw_duration_seconds: number | null;
+  min_acw_duration_seconds: number | null;
+  max_acw_duration_seconds: number | null;
+  observations_with_acw: number;
+  avg_aht_seconds: number | null;
+}
+
+export async function getContactCenterStats(studyId: number): Promise<ContactCenterStats | null> {
+  const sql = `
+    SELECT
+      AVG(o.call_duration_seconds) as avg_call_duration_seconds,
+      MEDIAN(o.call_duration_seconds) as median_call_duration_seconds,
+      MIN(o.call_duration_seconds) as min_call_duration_seconds,
+      MAX(o.call_duration_seconds) as max_call_duration_seconds,
+      AVG(o.acw_duration_seconds) as avg_acw_duration_seconds,
+      MEDIAN(o.acw_duration_seconds) as median_acw_duration_seconds,
+      MIN(o.acw_duration_seconds) as min_acw_duration_seconds,
+      MAX(o.acw_duration_seconds) as max_acw_duration_seconds,
+      COUNT(CASE WHEN o.acw_duration_seconds IS NOT NULL THEN 1 END) as observations_with_acw,
+      AVG(o.total_duration_seconds) as avg_aht_seconds
+    FROM time_study_observations o
+    JOIN time_study_sessions ss ON o.session_id = ss.id
+    WHERE ss.study_id = ?
+  `;
+
+  const rows = await executeQuery<Record<string, unknown>>(sql, [studyId]);
+  if (rows.length === 0) return null;
+
+  const row = rows[0];
+  return {
+    avg_call_duration_seconds: row.AVG_CALL_DURATION_SECONDS as number | null,
+    median_call_duration_seconds: row.MEDIAN_CALL_DURATION_SECONDS as number | null,
+    min_call_duration_seconds: row.MIN_CALL_DURATION_SECONDS as number | null,
+    max_call_duration_seconds: row.MAX_CALL_DURATION_SECONDS as number | null,
+    avg_acw_duration_seconds: row.AVG_ACW_DURATION_SECONDS as number | null,
+    median_acw_duration_seconds: row.MEDIAN_ACW_DURATION_SECONDS as number | null,
+    min_acw_duration_seconds: row.MIN_ACW_DURATION_SECONDS as number | null,
+    max_acw_duration_seconds: row.MAX_ACW_DURATION_SECONDS as number | null,
+    observations_with_acw: (row.OBSERVATIONS_WITH_ACW as number) || 0,
+    avg_aht_seconds: row.AVG_AHT_SECONDS as number | null,
   };
 }
 

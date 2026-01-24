@@ -37,6 +37,8 @@ interface ObservationRow {
   started_at: string;
   ended_at: string | null;
   total_duration_seconds: number | null;
+  call_duration_seconds: number | null;
+  acw_duration_seconds: number | null;
   outcome_id: number | null;
   outcome_name: string | null;
   notes: string | null;
@@ -161,170 +163,218 @@ export default function DataGridPage() {
     }
   };
 
-  // Column definitions
+  // Determine if this is a Contact Center study
+  const isContactCenter = config?.study.structure_type === 'phases';
+
+  // Column definitions - dynamic based on study type
   const columns = useMemo(
-    () => [
-      columnHelper.display({
-        id: 'select',
-        header: ({ table }) => (
-          <input
-            type="checkbox"
-            checked={table.getIsAllRowsSelected()}
-            onChange={table.getToggleAllRowsSelectedHandler()}
-            className="rounded border-gray-300"
-          />
-        ),
-        cell: ({ row }) => (
-          <input
-            type="checkbox"
-            checked={row.getIsSelected()}
-            onChange={row.getToggleSelectedHandler()}
-            className="rounded border-gray-300"
-          />
-        ),
-        size: 40,
-      }),
-      columnHelper.accessor('id', {
-        header: 'Ob',
-        cell: (info) => (
-          <span className="font-mono text-gray-500">{info.getValue()}</span>
-        ),
-        size: 60,
-      }),
-      columnHelper.accessor('session_date', {
-        header: 'Date',
-        cell: (info) => {
-          const date = info.getValue();
-          if (!date) return <span className="text-gray-400">--</span>;
-          return (
-            <span className="text-sm text-gray-600">
-              {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-          );
-        },
-        size: 80,
-      }),
-      columnHelper.accessor('session_observer_name', {
-        header: 'Observer',
-        cell: (info) => (
-          <span className="text-sm">{info.getValue()}</span>
-        ),
-        filterFn: 'includesString',
-      }),
-      columnHelper.accessor('session_observed_worker', {
-        header: 'Observed',
-        cell: (info) => {
-          const worker = info.getValue();
-          if (!worker) return <span className="text-gray-400">--</span>;
-          return <span className="text-sm">{worker}</span>;
-        },
-        filterFn: 'includesString',
-      }),
-      columnHelper.accessor('total_duration_seconds', {
-        header: 'Duration',
-        cell: (info) => (
-          <span className="font-mono text-sm">
-            {formatDuration(info.getValue())}
-          </span>
-        ),
-        sortingFn: 'basic',
-      }),
-      columnHelper.accessor('activity_name', {
-        header: 'Activity',
-        cell: (info) => (
-          <span className="text-sm truncate max-w-[200px] block" title={info.getValue() || ''}>
-            {info.getValue() || <span className="text-gray-400 italic">Not coded</span>}
-          </span>
-        ),
-        filterFn: 'includesString',
-      }),
-      columnHelper.accessor('outcome_name', {
-        header: 'Outcome',
-        cell: (info) => {
-          const outcome = info.getValue();
-          if (!outcome) return <span className="text-gray-400">--</span>;
+    () => {
+      const baseColumns = [
+        columnHelper.display({
+          id: 'select',
+          header: ({ table }) => (
+            <input
+              type="checkbox"
+              checked={table.getIsAllRowsSelected()}
+              onChange={table.getToggleAllRowsSelectedHandler()}
+              className="rounded border-gray-300"
+            />
+          ),
+          cell: ({ row }) => (
+            <input
+              type="checkbox"
+              checked={row.getIsSelected()}
+              onChange={row.getToggleSelectedHandler()}
+              className="rounded border-gray-300"
+            />
+          ),
+          size: 40,
+        }),
+        columnHelper.accessor('id', {
+          header: 'Ob',
+          cell: (info) => (
+            <span className="font-mono text-gray-500">{info.getValue()}</span>
+          ),
+          size: 60,
+        }),
+        columnHelper.accessor('session_date', {
+          header: 'Date',
+          cell: (info) => {
+            const date = info.getValue();
+            if (!date) return <span className="text-gray-400">--</span>;
+            return (
+              <span className="text-sm text-gray-600">
+                {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            );
+          },
+          size: 80,
+        }),
+        columnHelper.accessor('session_observer_name', {
+          header: 'Observer',
+          cell: (info) => (
+            <span className="text-sm">{info.getValue()}</span>
+          ),
+          filterFn: 'includesString',
+        }),
+        columnHelper.accessor('session_observed_worker', {
+          header: 'Observed',
+          cell: (info) => {
+            const worker = info.getValue();
+            if (!worker) return <span className="text-gray-400">--</span>;
+            return <span className="text-sm">{worker}</span>;
+          },
+          filterFn: 'includesString',
+        }),
+      ];
 
-          const colors: Record<string, string> = {
-            Complete: 'bg-green-100 text-green-700',
-            Transferred: 'bg-yellow-100 text-yellow-700',
-            Pended: 'bg-orange-100 text-orange-700',
-          };
-
-          return (
-            <span className={`text-xs px-2 py-0.5 rounded ${colors[outcome] || 'bg-gray-100 text-gray-700'}`}>
-              {outcome}
-            </span>
-          );
-        },
-        filterFn: 'equals',
-      }),
-      columnHelper.accessor('flag_names', {
-        header: 'Flags',
-        cell: (info) => {
-          const flags = info.getValue();
-          if (!flags || flags.length === 0) return null;
-
-          return (
-            <div className="flex flex-wrap gap-1">
-              {flags.map((flag, i) => (
-                <span key={i} className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                  {flag}
+      // Duration columns - different for Contact Center vs Simple
+      const durationColumns = isContactCenter
+        ? [
+            columnHelper.accessor('call_duration_seconds', {
+              header: 'Call',
+              cell: (info) => (
+                <span className="font-mono text-sm text-blue-600">
+                  {formatDuration(info.getValue())}
                 </span>
-              ))}
+              ),
+              sortingFn: 'basic',
+            }),
+            columnHelper.accessor('acw_duration_seconds', {
+              header: 'ACW',
+              cell: (info) => {
+                const acw = info.getValue();
+                if (acw == null) return <span className="text-gray-400">--</span>;
+                return (
+                  <span className="font-mono text-sm text-orange-600">
+                    {formatDuration(acw)}
+                  </span>
+                );
+              },
+              sortingFn: 'basic',
+            }),
+            columnHelper.accessor('total_duration_seconds', {
+              header: 'AHT',
+              cell: (info) => (
+                <span className="font-mono text-sm">
+                  {formatDuration(info.getValue())}
+                </span>
+              ),
+              sortingFn: 'basic',
+            }),
+          ]
+        : [
+            columnHelper.accessor('total_duration_seconds', {
+              header: 'Duration',
+              cell: (info) => (
+                <span className="font-mono text-sm">
+                  {formatDuration(info.getValue())}
+                </span>
+              ),
+              sortingFn: 'basic',
+            }),
+          ];
+
+      const remainingColumns = [
+        columnHelper.accessor('activity_name', {
+          header: 'Activity',
+          cell: (info) => (
+            <span className="text-sm truncate max-w-[200px] block" title={info.getValue() || ''}>
+              {info.getValue() || <span className="text-gray-400 italic">Not coded</span>}
+            </span>
+          ),
+          filterFn: 'includesString',
+        }),
+        columnHelper.accessor('outcome_name', {
+          header: 'Outcome',
+          cell: (info) => {
+            const outcome = info.getValue();
+            if (!outcome) return <span className="text-gray-400">--</span>;
+
+            const colors: Record<string, string> = {
+              Complete: 'bg-green-100 text-green-700',
+              Transferred: 'bg-yellow-100 text-yellow-700',
+              Pended: 'bg-orange-100 text-orange-700',
+            };
+
+            return (
+              <span className={`text-xs px-2 py-0.5 rounded ${colors[outcome] || 'bg-gray-100 text-gray-700'}`}>
+                {outcome}
+              </span>
+            );
+          },
+          filterFn: 'equals',
+        }),
+        columnHelper.accessor('flag_names', {
+          header: 'Flags',
+          cell: (info) => {
+            const flags = info.getValue();
+            if (!flags || flags.length === 0) return null;
+
+            return (
+              <div className="flex flex-wrap gap-1">
+                {flags.map((flag, i) => (
+                  <span key={i} className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                    {flag}
+                  </span>
+                ))}
+              </div>
+            );
+          },
+          enableSorting: false,
+        }),
+        columnHelper.accessor('notes', {
+          header: 'Notes',
+          cell: (info) => {
+            const notes = info.getValue();
+            if (!notes) return null;
+            return (
+              <span className="text-sm text-gray-600 truncate max-w-[150px] block" title={notes}>
+                {notes}
+              </span>
+            );
+          },
+          enableSorting: false,
+        }),
+        columnHelper.accessor('opportunity', {
+          header: 'Opportunity',
+          cell: (info) => {
+            const opportunity = info.getValue();
+            if (!opportunity) return null;
+            return (
+              <span className="text-sm text-purple-600 truncate max-w-[150px] block" title={opportunity}>
+                {opportunity}
+              </span>
+            );
+          },
+          enableSorting: false,
+        }),
+        columnHelper.display({
+          id: 'actions',
+          header: 'Actions',
+          cell: ({ row }) => (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingRow(row.original)}
+                className="text-blue-600 hover:text-blue-800 text-sm"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleDeleteSingle(row.original.id)}
+                className="text-red-600 hover:text-red-800 text-sm"
+              >
+                Delete
+              </button>
             </div>
-          );
-        },
-        enableSorting: false,
-      }),
-      columnHelper.accessor('notes', {
-        header: 'Notes',
-        cell: (info) => {
-          const notes = info.getValue();
-          if (!notes) return null;
-          return (
-            <span className="text-sm text-gray-600 truncate max-w-[150px] block" title={notes}>
-              {notes}
-            </span>
-          );
-        },
-        enableSorting: false,
-      }),
-      columnHelper.accessor('opportunity', {
-        header: 'Opportunity',
-        cell: (info) => {
-          const opportunity = info.getValue();
-          if (!opportunity) return null;
-          return (
-            <span className="text-sm text-purple-600 truncate max-w-[150px] block" title={opportunity}>
-              {opportunity}
-            </span>
-          );
-        },
-        enableSorting: false,
-      }),
-      columnHelper.display({
-        id: 'actions',
-        header: 'Actions',
-        cell: ({ row }) => (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setEditingRow(row.original)}
-              className="text-blue-600 hover:text-blue-800 text-sm"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => handleDeleteSingle(row.original.id)}
-              className="text-red-600 hover:text-red-800 text-sm"
-            >
-              Delete
-            </button>
-          </div>
-        ),
-        size: 100,
-      }),
-    ],
-    []
+          ),
+          size: 100,
+        }),
+      ];
+
+      return [...baseColumns, ...durationColumns, ...remainingColumns];
+    },
+    [isContactCenter]
   );
 
   const table = useReactTable({
