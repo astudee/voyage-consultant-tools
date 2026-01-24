@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStudyFlags, createStudyFlag } from '@/lib/snowflake-time-study';
+import { getStudyFlags, createStudyFlag, deleteStudyFlag } from '@/lib/snowflake-time-study';
 
 export async function GET(
   request: NextRequest,
@@ -51,6 +51,35 @@ export async function POST(
     console.error('API error creating study flag:', error);
     return NextResponse.json(
       { error: 'Failed to create flag', details: String(error) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const studyId = parseInt(id, 10);
+    if (isNaN(studyId)) {
+      return NextResponse.json({ error: 'Invalid study ID' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { flag_id } = body;
+
+    if (!flag_id) {
+      return NextResponse.json({ error: 'flag_id is required' }, { status: 400 });
+    }
+
+    await deleteStudyFlag(flag_id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('API error deleting study flag:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete flag', details: String(error) },
       { status: 500 }
     );
   }

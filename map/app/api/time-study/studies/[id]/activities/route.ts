@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStudyActivities, createStudyActivity } from '@/lib/snowflake-time-study';
+import { getStudyActivities, createStudyActivity, deleteStudyActivity, updateStudyActivity } from '@/lib/snowflake-time-study';
 
 export async function GET(
   request: NextRequest,
@@ -52,6 +52,64 @@ export async function POST(
     console.error('API error creating study activity:', error);
     return NextResponse.json(
       { error: 'Failed to create activity', details: String(error) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const studyId = parseInt(id, 10);
+    if (isNaN(studyId)) {
+      return NextResponse.json({ error: 'Invalid study ID' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { activity_id } = body;
+
+    if (!activity_id) {
+      return NextResponse.json({ error: 'activity_id is required' }, { status: 400 });
+    }
+
+    await deleteStudyActivity(activity_id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('API error deleting study activity:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete activity', details: String(error) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const studyId = parseInt(id, 10);
+    if (isNaN(studyId)) {
+      return NextResponse.json({ error: 'Invalid study ID' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { activity_id, is_active } = body;
+
+    if (!activity_id) {
+      return NextResponse.json({ error: 'activity_id is required' }, { status: 400 });
+    }
+
+    await updateStudyActivity(activity_id, { is_active });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('API error updating study activity:', error);
+    return NextResponse.json(
+      { error: 'Failed to update activity', details: String(error) },
       { status: 500 }
     );
   }

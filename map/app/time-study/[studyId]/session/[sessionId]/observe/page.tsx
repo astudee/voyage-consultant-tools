@@ -682,21 +682,6 @@ export default function ObservationPage() {
           </div>
         </div>
 
-        {/* Activity selector for simple timer with multiple activities */}
-        {isSimpleTimer && activeActivities.length > 1 && (
-          <select
-            value={selectedActivityId || ''}
-            onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : null)}
-            className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white"
-          >
-            <option value="">Select activity</option>
-            {activeActivities.map((activity) => (
-              <option key={activity.id} value={activity.id}>
-                {activity.activity_name}
-              </option>
-            ))}
-          </select>
-        )}
       </header>
 
       {/* Error display */}
@@ -712,6 +697,24 @@ export default function ObservationPage() {
         {/* Timer Section */}
         <div className="flex-shrink-0 bg-gray-800 p-4">
           <div className="max-w-md mx-auto text-center">
+            {/* Activity selector - prominent center position */}
+            {isSimpleTimer && activeActivities.length > 1 && (
+              <div className="mb-4">
+                <select
+                  value={selectedActivityId || ''}
+                  onChange={(e) => setSelectedActivityId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full max-w-xs mx-auto block bg-gray-700 border-2 border-gray-500 rounded-lg px-4 py-2.5 text-base text-white text-center font-medium focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">-- Select Activity --</option>
+                  {activeActivities.map((activity) => (
+                    <option key={activity.id} value={activity.id}>
+                      {activity.activity_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Timer Display */}
             <div
               className={`font-mono text-5xl tracking-wider mb-4 ${

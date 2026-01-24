@@ -404,6 +404,27 @@ export async function createStudyActivity(studyId: number, data: TimeStudyActivi
   return nextId;
 }
 
+export async function deleteStudyActivity(activityId: number): Promise<void> {
+  // Check if activity is used in any observations
+  const checkSql = `
+    SELECT COUNT(*) as count FROM time_study_observations WHERE study_activity_id = ?
+  `;
+  const result = await executeQuery<Record<string, unknown>>(checkSql, [activityId]);
+  const count = (result[0]?.COUNT as number) || 0;
+
+  if (count > 0) {
+    throw new Error(`Cannot delete activity: it is used in ${count} observation(s)`);
+  }
+
+  const sql = `DELETE FROM time_study_activities WHERE id = ?`;
+  await executeQuery(sql, [activityId]);
+}
+
+export async function updateStudyActivity(activityId: number, data: { is_active?: boolean }): Promise<void> {
+  const sql = `UPDATE time_study_activities SET is_active = ? WHERE id = ?`;
+  await executeQuery(sql, [data.is_active ?? true, activityId]);
+}
+
 // ============================================
 // STUDY FLAGS
 // ============================================
@@ -442,6 +463,22 @@ export async function createStudyFlag(studyId: number, data: TimeStudyFlagInput)
   return nextId;
 }
 
+export async function deleteStudyFlag(flagId: number): Promise<void> {
+  // Check if flag is used in any observations
+  const checkSql = `
+    SELECT COUNT(*) as count FROM time_study_observation_flags WHERE flag_id = ?
+  `;
+  const result = await executeQuery<Record<string, unknown>>(checkSql, [flagId]);
+  const count = (result[0]?.COUNT as number) || 0;
+
+  if (count > 0) {
+    throw new Error(`Cannot delete flag: it is used in ${count} observation(s)`);
+  }
+
+  const sql = `DELETE FROM time_study_flags WHERE id = ?`;
+  await executeQuery(sql, [flagId]);
+}
+
 // ============================================
 // STUDY OUTCOMES
 // ============================================
@@ -477,6 +514,22 @@ export async function createStudyOutcome(studyId: number, data: TimeStudyOutcome
 
   await executeQuery(sql, [nextId, studyId, data.outcome_name]);
   return nextId;
+}
+
+export async function deleteStudyOutcome(outcomeId: number): Promise<void> {
+  // Check if outcome is used in any observations
+  const checkSql = `
+    SELECT COUNT(*) as count FROM time_study_observations WHERE outcome_id = ?
+  `;
+  const result = await executeQuery<Record<string, unknown>>(checkSql, [outcomeId]);
+  const count = (result[0]?.COUNT as number) || 0;
+
+  if (count > 0) {
+    throw new Error(`Cannot delete outcome: it is used in ${count} observation(s)`);
+  }
+
+  const sql = `DELETE FROM time_study_outcomes WHERE id = ?`;
+  await executeQuery(sql, [outcomeId]);
 }
 
 // Helper to create default outcomes

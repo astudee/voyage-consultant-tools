@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import { SettingsProvider } from "@/lib/SettingsContext";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import SessionProvider from "@/components/SessionProvider";
@@ -34,12 +34,7 @@ export default function RootLayout({
         <SessionProvider>
           <SettingsProvider>
             <WorkflowProvider>
-              <div className="flex h-screen">
-                <Sidebar />
-                <main className="flex-1 overflow-hidden">
-                  {children}
-                </main>
-              </div>
+              <AppShell>{children}</AppShell>
             </WorkflowProvider>
           </SettingsProvider>
         </SessionProvider>
