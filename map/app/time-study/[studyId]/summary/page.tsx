@@ -27,7 +27,7 @@ export default function StudySummaryPage() {
   const [data, setData] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'steps' | 'sessions'>(
+  const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'steps' | 'sessions' | 'data'>(
     'overview'
   );
 
@@ -148,6 +148,12 @@ export default function StudySummaryPage() {
               {tab}
             </button>
           ))}
+          <Link
+            href={`/time-study/${studyId}/data`}
+            className="py-3 border-b-2 text-sm font-medium transition-colors border-transparent text-gray-500 hover:text-gray-700"
+          >
+            Data Grid
+          </Link>
         </nav>
       </div>
 

@@ -54,6 +54,8 @@ export type {
   SessionStatus,
 };
 
+// Export StudyObservationRow type is defined inline in the file
+
 // ============================================
 // TEMPLATES
 // ============================================
@@ -869,6 +871,177 @@ export async function updateObservationStep(stepId: number, endedAt: string, dur
     WHERE id = ?
   `;
   await executeQuery(sql, [endedAt, durationSeconds, stepId]);
+}
+
+export async function deleteObservation(observationId: number): Promise<void> {
+  // Delete observation steps and flags first
+  await executeQuery('DELETE FROM time_study_observation_steps WHERE observation_id = ?', [observationId]);
+  await executeQuery('DELETE FROM time_study_observation_flags WHERE observation_id = ?', [observationId]);
+  await executeQuery('DELETE FROM time_study_observations WHERE id = ?', [observationId]);
+}
+
+export async function deleteObservationsBulk(observationIds: number[]): Promise<void> {
+  if (observationIds.length === 0) return;
+
+  const placeholders = observationIds.map(() => '?').join(',');
+
+  // Delete observation steps and flags first
+  await executeQuery(`DELETE FROM time_study_observation_steps WHERE observation_id IN (${placeholders})`, observationIds);
+  await executeQuery(`DELETE FROM time_study_observation_flags WHERE observation_id IN (${placeholders})`, observationIds);
+  await executeQuery(`DELETE FROM time_study_observations WHERE id IN (${placeholders})`, observationIds);
+}
+
+// Get all observations for a study (across all sessions) - for data grid view
+export interface StudyObservationRow {
+  id: number;
+  session_id: number;
+  session_observer_name: string;
+  session_observed_worker: string | null;
+  session_date: string;
+  study_activity_id: number | null;
+  activity_name: string | null;
+  adhoc_activity_name: string | null;
+  observation_number: number;
+  started_at: string;
+  ended_at: string | null;
+  total_duration_seconds: number | null;
+  outcome_id: number | null;
+  outcome_name: string | null;
+  notes: string | null;
+  opportunity: string | null;
+  created_at: string | null;
+  flag_ids: number[];
+  flag_names: string[];
+}
+
+export async function getStudyObservations(studyId: number): Promise<StudyObservationRow[]> {
+  const sql = `
+    SELECT
+      o.id, o.session_id,
+      ss.observer_name as session_observer_name,
+      ss.observed_worker_name as session_observed_worker,
+      ss.session_date,
+      o.study_activity_id,
+      COALESCE(sa.activity_name, o.adhoc_activity_name) as activity_name,
+      o.adhoc_activity_name, o.observation_number,
+      o.started_at, o.ended_at, o.total_duration_seconds,
+      o.outcome_id, oc.outcome_name,
+      o.notes, o.opportunity, o.created_at
+    FROM time_study_observations o
+    JOIN time_study_sessions ss ON o.session_id = ss.id
+    LEFT JOIN time_study_activities sa ON o.study_activity_id = sa.id
+    LEFT JOIN time_study_outcomes oc ON o.outcome_id = oc.id
+    WHERE ss.study_id = ?
+    ORDER BY o.id DESC
+  `;
+
+  const rows = await executeQuery<Record<string, unknown>>(sql, [studyId]);
+
+  // Get all flags in one query for efficiency
+  const flagsSql = `
+    SELECT obs_flags.observation_id, f.id as flag_id, f.flag_name
+    FROM time_study_observation_flags obs_flags
+    JOIN time_study_flags f ON obs_flags.flag_id = f.id
+    JOIN time_study_observations o ON obs_flags.observation_id = o.id
+    JOIN time_study_sessions ss ON o.session_id = ss.id
+    WHERE ss.study_id = ?
+  `;
+  const flagRows = await executeQuery<Record<string, unknown>>(flagsSql, [studyId]);
+
+  // Build a map of observation_id -> flags
+  const flagMap = new Map<number, { ids: number[]; names: string[] }>();
+  for (const flagRow of flagRows) {
+    const obsId = flagRow.OBSERVATION_ID as number;
+    if (!flagMap.has(obsId)) {
+      flagMap.set(obsId, { ids: [], names: [] });
+    }
+    flagMap.get(obsId)!.ids.push(flagRow.FLAG_ID as number);
+    flagMap.get(obsId)!.names.push(flagRow.FLAG_NAME as string);
+  }
+
+  return rows.map((row) => {
+    const obsId = row.ID as number;
+    const flags = flagMap.get(obsId) || { ids: [], names: [] };
+    return {
+      id: obsId,
+      session_id: row.SESSION_ID as number,
+      session_observer_name: row.SESSION_OBSERVER_NAME as string,
+      session_observed_worker: row.SESSION_OBSERVED_WORKER as string | null,
+      session_date: row.SESSION_DATE as string,
+      study_activity_id: row.STUDY_ACTIVITY_ID as number | null,
+      activity_name: row.ACTIVITY_NAME as string | null,
+      adhoc_activity_name: row.ADHOC_ACTIVITY_NAME as string | null,
+      observation_number: row.OBSERVATION_NUMBER as number,
+      started_at: row.STARTED_AT as string,
+      ended_at: row.ENDED_AT as string | null,
+      total_duration_seconds: row.TOTAL_DURATION_SECONDS as number | null,
+      outcome_id: row.OUTCOME_ID as number | null,
+      outcome_name: row.OUTCOME_NAME as string | null,
+      notes: row.NOTES as string | null,
+      opportunity: row.OPPORTUNITY as string | null,
+      created_at: row.CREATED_AT as string | null,
+      flag_ids: flags.ids,
+      flag_names: flags.names,
+    };
+  });
+}
+
+// Create an observation directly for a study (manual entry, not tied to live session)
+export async function createStudyObservation(studyId: number, data: {
+  session_id: number;
+  study_activity_id?: number | null;
+  adhoc_activity_name?: string | null;
+  started_at: string;
+  ended_at?: string | null;
+  total_duration_seconds?: number | null;
+  outcome_id?: number | null;
+  notes?: string | null;
+  opportunity?: string | null;
+  flag_ids?: number[];
+}): Promise<number> {
+  // Get the next observation number for this session
+  const obsNumResult = await executeQuery<Record<string, unknown>>(
+    'SELECT COALESCE(MAX(observation_number), 0) + 1 as NEXT_NUM FROM time_study_observations WHERE session_id = ?',
+    [data.session_id]
+  );
+  const nextObsNum = obsNumResult[0].NEXT_NUM as number;
+
+  const idResult = await executeQuery<Record<string, unknown>>(
+    'SELECT COALESCE(MAX(id), 0) + 1 as NEXT_ID FROM time_study_observations'
+  );
+  const nextId = idResult[0].NEXT_ID as number;
+
+  const sql = `
+    INSERT INTO time_study_observations
+    (id, session_id, study_activity_id, adhoc_activity_name, observation_number, started_at, ended_at, total_duration_seconds, outcome_id, notes, opportunity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  await executeQuery(sql, [
+    nextId,
+    data.session_id,
+    data.study_activity_id || null,
+    data.adhoc_activity_name || null,
+    nextObsNum,
+    data.started_at,
+    data.ended_at || null,
+    data.total_duration_seconds || null,
+    data.outcome_id || null,
+    data.notes || null,
+    data.opportunity || null,
+  ]);
+
+  // Add flags if provided
+  if (data.flag_ids && data.flag_ids.length > 0) {
+    for (const flagId of data.flag_ids) {
+      await executeQuery(
+        'INSERT INTO time_study_observation_flags (observation_id, flag_id) VALUES (?, ?)',
+        [nextId, flagId]
+      );
+    }
+  }
+
+  return nextId;
 }
 
 // ============================================

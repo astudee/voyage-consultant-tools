@@ -445,10 +445,95 @@ The error message was: `syntax error line 4 at position 21 unexpected 'of'`
 
 ### Time Study Feature (Potential Enhancements)
 - **Export functionality**: Add CSV/Excel export for study data and observations
-- **Edit observation**: Currently can only delete, no edit capability after saving
-- **Bulk session management**: No way to archive or delete multiple sessions at once
 - **Real-time sync**: Multiple observers timing same study could benefit from live updates
 - **Mobile optimization**: Timer UI works but could be optimized for tablet/mobile use in field
+
+---
+
+## Session - January 24, 2026 (Data Grid Implementation)
+
+### Data Grid View for Time Study Observations
+
+Implemented a comprehensive Excel-like data grid for viewing and managing Time Study observations.
+
+**New Page:** `/time-study/[studyId]/data`
+
+**Features:**
+- **Sortable columns** - Click column headers to sort (ascending/descending)
+- **Filterable** - Filter by observer, activity, outcome using dropdowns
+- **Global search** - Search across all columns
+- **Row selection** - Checkbox selection for bulk operations
+- **Bulk delete** - Select multiple rows and delete at once
+- **Edit modal** - Click "Edit" to modify any observation (activity, duration, outcome, flags, notes, opportunity)
+- **Add modal** - Add new observations manually (retroactive entry)
+- **Pagination** - 25/50/100/200 rows per page with navigation
+
+**Columns:**
+| Column | Description |
+|--------|-------------|
+| Checkbox | Row selection for bulk operations |
+| Ob # | Observation ID (sortable) |
+| Observer | Session observer name (filterable) |
+| Time | Duration in MM:SS format (sortable) |
+| Activity | Activity name or ad-hoc (filterable) |
+| Outcome | Color-coded badge (Complete=green, Transferred=yellow, Pended=orange) |
+| Flags | Blue chips for each flag |
+| Notes | Truncated with hover tooltip |
+| Opportunity | Truncated with hover tooltip |
+| Actions | Edit and Delete buttons |
+
+**New API Endpoints:**
+- `GET /api/time-study/studies/[id]/observations` - Get all observations for a study (with session info and flags)
+- `POST /api/time-study/studies/[id]/observations` - Create observation manually (not during live session)
+- `DELETE /api/time-study/studies/[id]/observations` - Bulk delete observations
+- `DELETE /api/time-study/observations/[id]` - Delete single observation
+
+**New Snowflake Functions (snowflake-time-study.ts):**
+- `getStudyObservations(studyId)` - Get all observations across all sessions with flags
+- `createStudyObservation(studyId, data)` - Create observation for manual entry
+- `deleteObservation(observationId)` - Delete single observation with related data
+- `deleteObservationsBulk(observationIds)` - Bulk delete multiple observations
+
+**New Type:**
+```typescript
+interface StudyObservationRow {
+  id: number;
+  session_id: number;
+  session_observer_name: string;
+  session_observed_worker: string | null;
+  session_date: string;
+  study_activity_id: number | null;
+  activity_name: string | null;
+  adhoc_activity_name: string | null;
+  observation_number: number;
+  started_at: string;
+  ended_at: string | null;
+  total_duration_seconds: number | null;
+  outcome_id: number | null;
+  outcome_name: string | null;
+  notes: string | null;
+  opportunity: string | null;
+  created_at: string | null;
+  flag_ids: number[];
+  flag_names: string[];
+}
+```
+
+**New Dependencies:**
+- `@tanstack/react-table` - TanStack Table for data grid
+
+**Files Created:**
+- `map/app/time-study/[studyId]/data/page.tsx` - Data grid page with TanStack Table
+- `map/app/api/time-study/studies/[id]/observations/route.ts` - GET/POST/DELETE for study observations
+
+**Files Modified:**
+- `map/lib/snowflake-time-study.ts` - Added delete and bulk operations
+- `map/app/api/time-study/observations/[id]/route.ts` - Added DELETE method
+- `map/app/time-study/[studyId]/summary/page.tsx` - Added "Data Grid" tab link
+
+**Navigation:**
+- From Summary page: Click "Data Grid" tab to view all observations
+- From Study list: Go to study summary, then click "Data Grid"
 
 ### Verified Working (January 24, 2026)
 - Build passes with no errors

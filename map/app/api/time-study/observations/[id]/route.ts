@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getObservation, updateObservation } from '@/lib/snowflake-time-study';
+import { getObservation, updateObservation, deleteObservation } from '@/lib/snowflake-time-study';
 
 export async function GET(
   request: NextRequest,
@@ -46,6 +46,29 @@ export async function PUT(
     console.error('API error updating observation:', error);
     return NextResponse.json(
       { error: 'Failed to update observation', details: String(error) },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const observationId = parseInt(id, 10);
+    if (isNaN(observationId)) {
+      return NextResponse.json({ error: 'Invalid observation ID' }, { status: 400 });
+    }
+
+    await deleteObservation(observationId);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('API error deleting observation:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete observation', details: String(error) },
       { status: 500 }
     );
   }
