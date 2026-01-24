@@ -77,6 +77,10 @@ export default function ObservationPage() {
   const [editingObservation, setEditingObservation] = useState<TimeStudyObservation | null>(null);
   const [savingObservation, setSavingObservation] = useState(false);
 
+  // Debounce ref to prevent double-clicks
+  const lastClickTimeRef = useRef<number>(0);
+  const DEBOUNCE_MS = 500; // Minimum time between clicks
+
   // Fetch study and session data
   useEffect(() => {
     Promise.all([
@@ -147,8 +151,22 @@ export default function ObservationPage() {
   // Quick log for simple timer - tap outcome = log + restart
   const handleQuickLog = useCallback(
     async (outcomeId: number) => {
+      // Debounce - prevent double-clicks
+      const now = Date.now();
+      if (now - lastClickTimeRef.current < DEBOUNCE_MS) {
+        console.log('handleQuickLog: debounced, too fast');
+        return;
+      }
+      lastClickTimeRef.current = now;
+
       if (!timerStartedAt || !studyData || !sessionData) {
         console.error('handleQuickLog: missing required data', { timerStartedAt, studyData: !!studyData, sessionData: !!sessionData });
+        return;
+      }
+
+      // Already saving - prevent concurrent saves
+      if (savingObservation) {
+        console.log('handleQuickLog: already saving, skipped');
         return;
       }
 
@@ -188,12 +206,17 @@ export default function ObservationPage() {
 
         // Refresh session data
         const sessionRes = await fetch(`/api/time-study/sessions/${sessionId}`);
+        if (!sessionRes.ok) {
+          console.error('Session refresh HTTP error:', sessionRes.status, sessionRes.statusText);
+          throw new Error(`Session refresh failed: ${sessionRes.status}`);
+        }
         const newSessionData = await sessionRes.json();
         if (newSessionData.error) {
           console.error('Session refresh error:', newSessionData);
-          throw new Error(newSessionData.error);
+          throw new Error(newSessionData.error + (newSessionData.details ? `: ${newSessionData.details}` : ''));
         }
         setSessionData(newSessionData);
+        console.log('Session refreshed, observations:', newSessionData.observations?.length || 0);
 
         // Restart timer immediately
         const now = new Date().toISOString();
@@ -206,7 +229,7 @@ export default function ObservationPage() {
         setSavingObservation(false);
       }
     },
-    [timerStartedAt, studyData, sessionData, sessionId, selectedActivityId, elapsedSeconds]
+    [timerStartedAt, studyData, sessionData, sessionId, selectedActivityId, elapsedSeconds, savingObservation]
   );
 
   // Discard - reset timer without logging
@@ -592,17 +615,19 @@ export default function ObservationPage() {
                           key={outcome.id}
                           onClick={() => handleQuickLog(outcome.id)}
                           disabled={savingObservation || (!selectedActivityId && activeActivities.length > 1)}
-                          className={`px-6 py-3 rounded-lg text-lg font-semibold transition-colors disabled:opacity-50 ${
+                          className={`px-6 py-3 rounded-lg text-lg font-semibold transition-all duration-150 disabled:opacity-50 active:scale-95 ${
+                            savingObservation ? 'opacity-70 cursor-wait' : ''
+                          } ${
                             outcome.outcome_name === 'Complete'
-                              ? 'bg-green-600 hover:bg-green-500'
+                              ? 'bg-green-600 hover:bg-green-500 active:bg-green-700'
                               : outcome.outcome_name === 'Transferred'
-                              ? 'bg-yellow-600 hover:bg-yellow-500'
+                              ? 'bg-yellow-600 hover:bg-yellow-500 active:bg-yellow-700'
                               : outcome.outcome_name === 'Pended'
-                              ? 'bg-orange-600 hover:bg-orange-500'
-                              : 'bg-blue-600 hover:bg-blue-500'
+                              ? 'bg-orange-600 hover:bg-orange-500 active:bg-orange-700'
+                              : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700'
                           }`}
                         >
-                          {outcome.outcome_name}
+                          {savingObservation ? '...' : outcome.outcome_name}
                         </button>
                       ))}
                     </div>

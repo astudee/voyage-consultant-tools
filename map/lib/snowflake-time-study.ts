@@ -876,74 +876,144 @@ export async function updateObservationStep(stepId: number, endedAt: string, dur
 // ============================================
 
 export async function getStudySummary(studyId: number): Promise<TimeStudySummary | null> {
-  const sql = `
-    SELECT * FROM time_study_summary WHERE study_id = ?
+  // Get study info first
+  const studySql = `
+    SELECT s.id, s.study_name, s.workflow_id, s.status,
+           w.workflow_name
+    FROM time_studies s
+    LEFT JOIN workflows w ON s.workflow_id = w.id
+    WHERE s.id = ?
   `;
+  const studyRows = await executeQuery<Record<string, unknown>>(studySql, [studyId]);
+  if (studyRows.length === 0) return null;
+  const studyRow = studyRows[0];
 
-  const rows = await executeQuery<Record<string, unknown>>(sql, [studyId]);
-  if (rows.length === 0) return null;
+  // Get aggregated stats from observations
+  const statsSql = `
+    SELECT
+      COUNT(DISTINCT ss.id) as session_count,
+      COUNT(DISTINCT ss.observer_name) as observer_count,
+      COUNT(o.id) as observation_count,
+      AVG(o.total_duration_seconds) as avg_duration_seconds,
+      MEDIAN(o.total_duration_seconds) as median_duration_seconds,
+      MIN(o.total_duration_seconds) as min_duration_seconds,
+      MAX(o.total_duration_seconds) as max_duration_seconds,
+      STDDEV(o.total_duration_seconds) as stddev_duration_seconds,
+      MIN(ss.session_date) as first_session_date,
+      MAX(ss.session_date) as last_session_date
+    FROM time_study_sessions ss
+    LEFT JOIN time_study_observations o ON o.session_id = ss.id
+    WHERE ss.study_id = ?
+  `;
+  const statsRows = await executeQuery<Record<string, unknown>>(statsSql, [studyId]);
+  const statsRow = statsRows[0] || {};
 
-  const row = rows[0];
   return {
-    study_id: row.STUDY_ID as number,
-    study_name: row.STUDY_NAME as string,
-    workflow_id: row.WORKFLOW_ID as number | null,
-    workflow_name: row.WORKFLOW_NAME as string | null,
-    study_status: row.STUDY_STATUS as StudyStatus,
-    session_count: row.SESSION_COUNT as number,
-    observer_count: row.OBSERVER_COUNT as number,
-    observation_count: row.OBSERVATION_COUNT as number,
-    avg_duration_seconds: row.AVG_DURATION_SECONDS as number | null,
-    median_duration_seconds: row.MEDIAN_DURATION_SECONDS as number | null,
-    min_duration_seconds: row.MIN_DURATION_SECONDS as number | null,
-    max_duration_seconds: row.MAX_DURATION_SECONDS as number | null,
-    stddev_duration_seconds: row.STDDEV_DURATION_SECONDS as number | null,
-    first_session_date: row.FIRST_SESSION_DATE as string | null,
-    last_session_date: row.LAST_SESSION_DATE as string | null,
+    study_id: studyRow.ID as number,
+    study_name: studyRow.STUDY_NAME as string,
+    workflow_id: studyRow.WORKFLOW_ID as number | null,
+    workflow_name: studyRow.WORKFLOW_NAME as string | null,
+    study_status: studyRow.STATUS as StudyStatus,
+    session_count: (statsRow.SESSION_COUNT as number) || 0,
+    observer_count: (statsRow.OBSERVER_COUNT as number) || 0,
+    observation_count: (statsRow.OBSERVATION_COUNT as number) || 0,
+    avg_duration_seconds: statsRow.AVG_DURATION_SECONDS as number | null,
+    median_duration_seconds: statsRow.MEDIAN_DURATION_SECONDS as number | null,
+    min_duration_seconds: statsRow.MIN_DURATION_SECONDS as number | null,
+    max_duration_seconds: statsRow.MAX_DURATION_SECONDS as number | null,
+    stddev_duration_seconds: statsRow.STDDEV_DURATION_SECONDS as number | null,
+    first_session_date: statsRow.FIRST_SESSION_DATE as string | null,
+    last_session_date: statsRow.LAST_SESSION_DATE as string | null,
   };
 }
 
 export async function getStudyActivitySummary(studyId: number): Promise<TimeStudyActivitySummary[]> {
+  // Get study name first
+  const studySql = `SELECT study_name FROM time_studies WHERE id = ?`;
+  const studyRows = await executeQuery<Record<string, unknown>>(studySql, [studyId]);
+  const studyName = studyRows.length > 0 ? (studyRows[0].STUDY_NAME as string) : '';
+
+  // Get activity summary - include both defined activities and ad-hoc ones
   const sql = `
-    SELECT * FROM time_study_activity_summary WHERE study_id = ?
+    SELECT
+      COALESCE(a.activity_name, o.adhoc_activity_name, 'Unspecified') as activity_name,
+      COALESCE(a.is_adhoc, CASE WHEN o.adhoc_activity_name IS NOT NULL THEN TRUE ELSE FALSE END) as is_adhoc,
+      COUNT(o.id) as observation_count,
+      AVG(o.total_duration_seconds) as avg_duration_seconds,
+      MEDIAN(o.total_duration_seconds) as median_duration_seconds,
+      MIN(o.total_duration_seconds) as min_duration_seconds,
+      MAX(o.total_duration_seconds) as max_duration_seconds,
+      STDDEV(o.total_duration_seconds) as stddev_duration_seconds,
+      SUM(CASE WHEN oc.outcome_name = 'Complete' THEN 1 ELSE 0 END) as complete_count,
+      SUM(CASE WHEN oc.outcome_name = 'Transferred' THEN 1 ELSE 0 END) as transferred_count,
+      SUM(CASE WHEN oc.outcome_name = 'Pended' THEN 1 ELSE 0 END) as pended_count
+    FROM time_study_observations o
+    JOIN time_study_sessions ss ON o.session_id = ss.id
+    LEFT JOIN time_study_activities a ON o.study_activity_id = a.id
+    LEFT JOIN time_study_outcomes oc ON o.outcome_id = oc.id
+    WHERE ss.study_id = ?
+    GROUP BY COALESCE(a.activity_name, o.adhoc_activity_name, 'Unspecified'),
+             COALESCE(a.is_adhoc, CASE WHEN o.adhoc_activity_name IS NOT NULL THEN TRUE ELSE FALSE END)
     ORDER BY observation_count DESC
   `;
 
   const rows = await executeQuery<Record<string, unknown>>(sql, [studyId]);
 
   return rows.map((row) => ({
-    study_id: row.STUDY_ID as number,
-    study_name: row.STUDY_NAME as string,
+    study_id: studyId,
+    study_name: studyName,
     activity_name: row.ACTIVITY_NAME as string,
     is_adhoc: row.IS_ADHOC as boolean,
-    observation_count: row.OBSERVATION_COUNT as number,
+    observation_count: (row.OBSERVATION_COUNT as number) || 0,
     avg_duration_seconds: row.AVG_DURATION_SECONDS as number | null,
     median_duration_seconds: row.MEDIAN_DURATION_SECONDS as number | null,
     min_duration_seconds: row.MIN_DURATION_SECONDS as number | null,
     max_duration_seconds: row.MAX_DURATION_SECONDS as number | null,
     stddev_duration_seconds: row.STDDEV_DURATION_SECONDS as number | null,
-    complete_count: row.COMPLETE_COUNT as number,
-    transferred_count: row.TRANSFERRED_COUNT as number,
-    pended_count: row.PENDED_COUNT as number,
+    complete_count: (row.COMPLETE_COUNT as number) || 0,
+    transferred_count: (row.TRANSFERRED_COUNT as number) || 0,
+    pended_count: (row.PENDED_COUNT as number) || 0,
   }));
 }
 
 export async function getStudyStepSummary(studyId: number): Promise<TimeStudyStepSummary[]> {
+  // Get study name first
+  const studySql = `SELECT study_name FROM time_studies WHERE id = ?`;
+  const studyRows = await executeQuery<Record<string, unknown>>(studySql, [studyId]);
+  const studyName = studyRows.length > 0 ? (studyRows[0].STUDY_NAME as string) : '';
+
+  // Get step summary
   const sql = `
-    SELECT * FROM time_study_step_summary WHERE study_id = ?
-    ORDER BY sequence_order
+    SELECT
+      st.id as step_id,
+      st.step_name,
+      st.sequence_order,
+      COUNT(DISTINCT os.observation_id) as observations_with_step,
+      COUNT(os.id) as total_visits,
+      AVG(os.duration_seconds) as avg_duration_seconds,
+      MEDIAN(os.duration_seconds) as median_duration_seconds,
+      MIN(os.duration_seconds) as min_duration_seconds,
+      MAX(os.duration_seconds) as max_duration_seconds,
+      CASE WHEN COUNT(DISTINCT os.observation_id) > 0
+           THEN COUNT(os.id)::FLOAT / COUNT(DISTINCT os.observation_id)
+           ELSE NULL END as avg_visits_per_observation
+    FROM time_study_steps st
+    LEFT JOIN time_study_observation_steps os ON os.step_id = st.id
+    WHERE st.study_id = ?
+    GROUP BY st.id, st.step_name, st.sequence_order
+    ORDER BY st.sequence_order
   `;
 
   const rows = await executeQuery<Record<string, unknown>>(sql, [studyId]);
 
   return rows.map((row) => ({
-    study_id: row.STUDY_ID as number,
-    study_name: row.STUDY_NAME as string,
+    study_id: studyId,
+    study_name: studyName,
     step_id: row.STEP_ID as number,
     step_name: row.STEP_NAME as string,
     sequence_order: row.SEQUENCE_ORDER as number,
-    observations_with_step: row.OBSERVATIONS_WITH_STEP as number,
-    total_visits: row.TOTAL_VISITS as number,
+    observations_with_step: (row.OBSERVATIONS_WITH_STEP as number) || 0,
+    total_visits: (row.TOTAL_VISITS as number) || 0,
     avg_duration_seconds: row.AVG_DURATION_SECONDS as number | null,
     median_duration_seconds: row.MEDIAN_DURATION_SECONDS as number | null,
     min_duration_seconds: row.MIN_DURATION_SECONDS as number | null,
